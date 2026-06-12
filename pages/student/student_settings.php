@@ -252,19 +252,7 @@ function timeAgo($datetime) {
 <body>
 
 <!-- Desktop Sidebar -->
-<aside class="hidden md:block fixed top-0 left-0 h-full w-64 bg-[#800020] shadow-xl overflow-y-auto z-30">
-    <div class="flex items-center gap-2 p-4 border-b border-[#600018]">
-        <div class="rounded-lg bg-white/20 p-2"><i class="fas fa-heartbeat text-white text-lg"></i></div>
-        <div><span class="font-bold text-white">PUPBC Carelink</span><p class="text-[10px] text-white/60">Health Information System</p></div>
-    </div>
-    
-    <div class="flex items-center gap-3 p-4 border-b border-[#600018] bg-[#600018]">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#c9a84c] text-[#800020] font-bold text-sm"><?php echo $initials; ?></div>
-        <div class="flex-1 min-w-0">
-            <div class="text-sm font-semibold text-white truncate"><?php echo htmlspecialchars($full_name); ?></div>
-            <div class="text-xs text-[#c9a84c] truncate"><?php echo htmlspecialchars($student_number); ?></div>
-        </div>
-    </div>
+<aside class="hidden md:flex md:flex-col fixed top-0 left-0 h-full w-64 bg-[#800020] shadow-xl overflow-y-auto z-30">
     
     <nav class="py-4">
         <div class="px-3 mb-2"><p class="text-[10px] font-semibold uppercase tracking-wider text-[#c9a84c] px-3">Main Menu</p></div>

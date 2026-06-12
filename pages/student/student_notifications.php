@@ -73,15 +73,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <div id="sidebarOverlay" class="sidebar-overlay fixed inset-0 bg-black/50 z-40 hidden md:hidden opacity-0 transition-opacity"></div>
 
 <!-- Sidebar -->
-<aside id="sidebar" class="sidebar fixed top-0 left-0 h-full w-72 bg-[#800020] z-50 shadow-xl overflow-y-auto sidebar-hidden md:sidebar-visible md:translate-x-0">
-    <div class="flex items-center justify-between p-4 border-b border-[#600018]">
-        <div class="flex items-center gap-2"><div class="rounded-lg bg-white/20 p-2"><i class="fas fa-heartbeat text-white text-lg"></i></div><div><span class="font-bold text-white">PUPBC Carelink</span><p class="text-[10px] text-white/60">Health Information System</p></div></div>
+<aside id="sidebar" class="sidebar flex flex-col fixed top-0 left-0 h-full w-72 bg-[#800020] z-50 shadow-xl overflow-y-auto sidebar-hidden md:sidebar-visible md:translate-x-0">
+    <div class="flex items-center justify-end p-4 md:hidden">
         <button id="closeSidebar" class="md:hidden text-white/70 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-    </div>
-    
-    <div class="flex items-center gap-3 p-4 border-b border-[#600018] bg-[#600018]">
-        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#c9a84c] text-[#800020] font-bold text-lg"><?php echo $initials; ?></div>
-        <div class="flex-1 min-w-0"><div class="text-sm font-semibold text-white truncate"><?php echo htmlspecialchars($full_name); ?></div><div class="text-xs text-[#c9a84c] truncate"><?php echo htmlspecialchars($student_number); ?></div><div class="text-xs text-white/50 truncate"><?php echo htmlspecialchars($course); ?></div></div>
     </div>
     
     <nav class="flex-1 py-4">

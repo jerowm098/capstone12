@@ -82,4 +82,4 @@ $pinitials = strtoupper(substr($patient['first_name'], 0, 1) . substr($patient['
         </a>
         <p class="text-center text-xs text-gray-400 mt-2">Full record includes visit history, documents, and file uploads</p>
     </div>
-</div>
+</div>  

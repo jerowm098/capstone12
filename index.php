@@ -14,41 +14,50 @@ $name = $email = $message = '';
 
 // Handle contact form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['contact_submit'])) {
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        $contact_error = 'Security verification failed. Please refresh the page.';
-    } elseif (!empty($_POST['bot_check'])) {
-        $contact_success = 'Message received. We\'ll get back to you soon.';
-    } else {
+    // CSRF Protection Check
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $contact_error = 'Security verification failed. Please refresh the page and try again.';
+    } 
+    // Honeypot Check
+    elseif (!empty($_POST['bot_check'])) {
+        error_log("Honeypot triggered by IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $contact_success = 'Thank you! Your message has been sent.';
+    } 
+    else {
         $name = trim($_POST['name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $message = trim($_POST['message'] ?? '');
         
         $errors = [];
-        
         if (strlen($name) < 2) $errors[] = 'Please enter your full name.';
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Please enter a valid email address.';
         if (strlen($message) < 10) $errors[] = 'Message must be at least 10 characters.';
         
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
         $last_submit_key = 'contact_' . str_replace('.', '_', $ip);
-        
         if (isset($_SESSION[$last_submit_key]) && time() - $_SESSION[$last_submit_key] < 300) {
             $errors[] = 'Please wait 5 minutes before sending another message.';
         }
         
         if (empty($errors) && isset($conn) && $conn) {
             $stmt = mysqli_prepare($conn, "INSERT INTO contact_messages (name, email, message, ip_address, created_at) VALUES (?, ?, ?, ?, NOW())");
-            mysqli_stmt_bind_param($stmt, "ssss", $name, $email, $message, $ip);
-            
-            if (mysqli_stmt_execute($stmt)) {
-                $contact_success = 'Thank you! Your message has been sent.';
-                $_SESSION[$last_submit_key] = time();
-                $name = $email = $message = '';
-                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            if ($stmt) {
+                mysqli_stmt_bind_param($stmt, "ssss", $name, $email, $message, $ip);
+                
+                if (mysqli_stmt_execute($stmt)) {
+                    $contact_success = 'Thank you! Your message has been sent successfully.';
+                    $_SESSION[$last_submit_key] = time();
+                    $name = $email = $message = '';
+                    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                } else {
+                    error_log("Contact form DB insert failed: " . mysqli_stmt_error($stmt));
+                    $contact_error = 'Failed to send message due to a server error. Please try again later.';
+                }
+                mysqli_stmt_close($stmt);
             } else {
-                $contact_error = 'Failed to send message. Please try again.';
+                error_log("Contact form DB prepare failed: " . mysqli_error($conn));
+                $contact_error = 'A system error occurred. Please try again later.';
             }
-            mysqli_stmt_close($stmt);
         } else {
             $contact_error = implode(' ', array_map('htmlspecialchars', $errors));
         }
@@ -61,30 +70,27 @@ $year = date('Y');
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <meta name="description" content="PUPBC Carelink - QR-integrated health information system for PUP Binan Campus">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>PUPBC Carelink | Smart Campus Health System</title>
-    
+    <meta name="description" content="PUPBC Carelink - A QR-integrated health information system for PUP Binan Campus, enabling faster check-ins, paperless records, and real-time health insights.">
+    <meta name="keywords" content="PUPBC, Carelink, Health System, PUP Binan, QR Code, Clinic, Student Health, Electronic Health Records">
+    <meta name="theme-color" content="#800020">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="PUPBC Carelink | Smart Campus Health System">
+    <meta property="og:description" content="QR-integrated health information system for PUP Binan Campus. Scan. Care. Connect.">
+    <meta property="og:type" content="website">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="assets/images/favicon.ico">
+    <link rel="apple-touch-icon" href="assets/images/clinic_logo.png">
+
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #fefaf5;
-            color: #1a1a2e;
-            line-height: 1.5;
-        }
-        
-        /* Color Variables */
         :root {
             --maroon: #800020;
             --maroon-dark: #5c0017;
@@ -97,586 +103,491 @@ $year = date('Y');
             --gray-300: #d1d5db;
             --gray-600: #4b5563;
             --gray-800: #1f2937;
+            --white: #ffffff;
+            --bg-body: #fefaf5;
             --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
             --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            --header-height: 70px;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-padding-top: var(--header-height);
+            -webkit-text-size-adjust: 100%;
         }
         
-        /* Utility Classes */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-body);
+            color: #1a1a2e;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            width: 100%;
+        }
+
         .container {
             max-width: 1280px;
             margin: 0 auto;
-            padding: 0 24px;
+            padding: 0 20px;
+            width: 100%;
         }
-        
-.btn-primary {
-            background: var(--maroon);
-            color: white;
-            padding: 10px 24px;
-            line-height: 1;
-            min-height: 44px;
-            border-radius: 14px;
-            font-weight: 600;
-            font-size: 15px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-            box-shadow: 0 4px 12px rgba(128, 0, 32, 0.15);
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-        
-        .btn-primary:hover {
-            background: var(--maroon-dark);
-            box-shadow: 0 6px 16px rgba(128, 0, 32, 0.25);
-            transform: translateY(-1px);
-        }
+        @media (min-width: 640px) { .container { padding: 0 24px; } }
+        @media (min-width: 1024px) { .container { padding: 0 32px; } }
 
-        .btn-primary:active {
-            transform: scale(0.96);
-            box-shadow: 0 2px 8px rgba(128, 0, 32, 0.1);
-        }
-        
-        .btn-outline {
-            background: white;
-            color: var(--gray-800);
-            padding: 10px 24px;
-            border-radius: 14px;
-            font-weight: 600;
-            font-size: 15px;
-            border: 1px solid var(--gray-200);
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-        
-        .btn-outline:hover {
-            border-color: var(--gray-300);
-            background: var(--gray-50);
-            transform: translateY(-1px);
-        }
-
-        .btn-outline:active {
-            transform: scale(0.96);
-            background: var(--gray-100);
-            box-shadow: none;
-        }
-        
         .section-title {
-            font-size: 2.5rem;
+            font-size: clamp(1.75rem, 5vw, 2.5rem);
             font-weight: 700;
             text-align: center;
             margin-bottom: 16px;
             color: var(--gray-800);
+            line-height: 1.3;
         }
         
         .section-subtitle {
             text-align: center;
             color: var(--gray-600);
-            max-width: 600px;
-            margin: 0 auto 48px;
-            font-size: 1.125rem;
+            max-width: 650px;
+            margin: 0 auto 40px;
+            font-size: 1rem;
+            line-height: 1.6;
         }
-        
+        @media (min-width: 640px) { .section-subtitle { font-size: 1.125rem; margin-bottom: 48px; } }
+
+        /* Buttons */
+        .btn-primary, .btn-outline {
+            padding: 10px 20px;
+            min-height: 44px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            white-space: nowrap;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            line-height: 1;
+            border: 1px solid transparent;
+        }
+        @media (min-width: 640px) { .btn-primary, .btn-outline { padding: 10px 24px; font-size: 0.9375rem; min-height: 48px; } }
+
+        .btn-primary {
+            background: var(--maroon);
+            color: white;
+            border-color: var(--maroon);
+            box-shadow: 0 4px 12px rgba(128, 0, 32, 0.15);
+        }
+        .btn-primary:hover { background: var(--maroon-dark); border-color: var(--maroon-dark); box-shadow: 0 6px 16px rgba(128, 0, 32, 0.25); transform: translateY(-1px); }
+        .btn-primary:active { transform: scale(0.97); }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--gray-800);
+            border-color: var(--gray-300);
+        }
+        .btn-outline:hover { background: var(--gray-50); border-color: var(--gray-400); transform: translateY(-1px); }
+        .btn-outline:active { transform: scale(0.97); }
+
         /* Header */
         .header {
             position: sticky;
             top: 0;
             z-index: 100;
             background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border-bottom: 1px solid var(--gray-200);
-            /* Required so the mobile dropdown positions relative to the header */
-            position: sticky;
+            height: var(--header-height);
         }
+        .header-content { display: flex; justify-content: space-between; align-items: center; height: 100%; }
+        .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; z-index: 102; flex-shrink: 0; }
+        .logo-icon { width: 38px; height: 38px; border-radius: 10px; overflow: hidden; flex-shrink: 0; box-shadow: var(--shadow-sm); }
+        @media (min-width: 640px) { .logo-icon { width: 42px; height: 42px; } }
+        .logo-icon img { width: 100%; height: 100%; object-fit: cover; }
+        .logo-text { font-size: 1rem; font-weight: 700; color: var(--gray-800); }
+        @media (min-width: 640px) { .logo-text { font-size: 1.25rem; } }
+        .logo-text span { color: var(--gold); }
 
-        /* Mobile nav dropdown */
-        .mobile-nav-open {
-            display: flex !important;
-            flex-direction: column;
-            position: absolute;
-            top: 70px;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 16px 24px;
-            box-shadow: var(--shadow-md);
-            z-index: 99;
-            gap: 12px;
-        }
+        /* Desktop Nav */
+        .header-right { display: none; align-items: center; gap: 24px; }
+        @media (min-width: 1024px) { .header-right { display: flex; } }
+        .nav-links { display: flex; gap: 24px; align-items: center; list-style: none; }
+        .nav-links a { text-decoration: none; color: var(--gray-600); font-weight: 500; font-size: 0.9375rem; transition: color 0.2s; white-space: nowrap; }
+        .nav-links a:hover { color: var(--maroon); }
+        .nav-buttons { display: flex; gap: 8px; align-items: center; }
 
-        .mobile-btns-open {
-            display: flex !important;
-            position: absolute;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 12px 24px 20px;
-            box-shadow: var(--shadow-md);
-            z-index: 99;
-            justify-content: center;
-            gap: 12px;
-        }
-        
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 70px;
-        }
-
-        /* Right side: nav + buttons grouped together */
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 32px;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .logo-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: white;
-            flex-shrink: 0;
-        }
-
-        .logo-icon img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .logo-text {
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
-        
-        .logo-text span {
-            color: var(--gold);
-        }
-        
-        .nav-links {
-            display: flex;
-            gap: 28px;
-            align-items: center;
-        }
-
-        .nav-links a {
-            text-decoration: none;
-            color: var(--gray-600);
-            font-weight: 500;
-            font-size: 0.9375rem;
-            transition: color 0.2s;
-            white-space: nowrap;
-        }
-
-        .nav-links a:hover {
-            color: var(--maroon);
-        }
-
-        .nav-buttons {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: nowrap;
-        }
-
-        .nav-buttons a {
-            white-space: nowrap;
-            line-height: 1;
-        }
-
-        /* extra safety for tight headers */
-        .header-right { min-width: 0; }
-        .nav-buttons { min-width: 0; }
-        .nav-buttons a { flex: 0 1 auto; }
-
+        /* Mobile Menu Button */
         .mobile-menu-btn {
-            display: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background: none;
             border: none;
             font-size: 24px;
             cursor: pointer;
             color: var(--gray-800);
-            padding: 4px;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            z-index: 102;
+            width: 44px;
+            height: 44px;
         }
-        
-        /* Hero logo image */
-        .hero-logo-img {
-            width: 100%;
-            max-width: 380px;
-            height: auto;
-            object-fit: contain;
-            display: block;
-            margin: 0 auto;
-            filter: drop-shadow(0 8px 24px rgba(0,0,0,0.35));
-            border-radius: 20px;
+        .mobile-menu-btn:active { background-color: var(--gray-100); }
+        @media (min-width: 1024px) { .mobile-menu-btn { display: none; } }
+
+        /* Mobile Menu Overlay */
+        .menu-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 99;
         }
+        .menu-overlay.active { display: block; animation: fadeInOverlay 0.3s ease-out forwards; }
+        @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Mobile Menu Dropdown */
+        .mobile-menu {
+            display: none;
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--white);
+            z-index: 101;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            box-shadow: var(--shadow-xl);
+        }
+        .mobile-menu.active { display: block; animation: slideDownMenu 0.3s ease-out forwards; }
+        @keyframes slideDownMenu { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .mobile-menu-inner {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .mobile-nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .mobile-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 15px 18px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--gray-800);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-nav-link i {
+            width: 22px;
+            text-align: center;
+            color: var(--maroon);
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .mobile-nav-link:active { background: var(--gray-100); transform: scale(0.98); }
+
+        .mobile-menu-divider {
+            height: 1px;
+            background: var(--gray-200);
+            margin: 16px 0;
+        }
+
+        .mobile-menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .mobile-btn-outline, .mobile-btn-primary {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 24px;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .mobile-btn-outline {
+            background: var(--white);
+            color: var(--gray-800);
+            border: 2px solid var(--gray-300);
+        }
+        .mobile-btn-outline:active { background: var(--gray-50); border-color: var(--gray-400); }
+
+        .mobile-btn-primary {
+            background: var(--maroon);
+            color: var(--white);
+            border: 2px solid var(--maroon);
+            box-shadow: 0 4px 16px rgba(128, 0, 32, 0.2);
+        }
+        .mobile-btn-primary:active { background: var(--maroon-dark); border-color: var(--maroon-dark); }
 
         /* Hero Section */
         .hero {
             background: linear-gradient(135deg, #800020 0%, #4a0010 50%, #800020 100%);
-            padding: 80px 0;
+            padding: 60px 0;
             position: relative;
             overflow: hidden;
         }
-        
+        @media (min-width: 640px) { .hero { padding: 80px 0; } }
         .hero::before {
             content: '';
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('assets/images/pupbg.jpg') center/cover;
-            opacity: 0.1;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url('assets/images/pupbg.jpg') center/cover no-repeat;
+            opacity: 0.08;
             pointer-events: none;
         }
-        
-        .hero-content {
-            display: flex;
-            flex-direction: column;
+        .hero-grid {
             position: relative;
             z-index: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+            align-items: center;
         }
-        
+        @media (min-width: 768px) { .hero-grid { grid-template-columns: 1fr 1fr; gap: 40px; } }
+        @media (min-width: 1024px) { .hero-grid { grid-template-columns: 1.1fr 0.9fr; gap: 60px; } }
+        .hero-text { display: flex; flex-direction: column; align-items: center; text-align: center; }
+        @media (min-width: 768px) { .hero-text { align-items: flex-start; text-align: left; } }
         .hero-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             background: rgba(201, 168, 76, 0.2);
             border: 1px solid rgba(201, 168, 76, 0.4);
-            padding: 8px 16px;
+            padding: 6px 16px;
             border-radius: 50px;
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             color: var(--gold);
-            margin-bottom: 24px;
-        }
-        
-        .hero h1 {
-            font-size: 3.5rem;
-            font-weight: 800;
-            line-height: 1.2;
-            color: white;
             margin-bottom: 20px;
-        }
-        
-        .hero h1 span {
-            color: var(--gold);
-        }
-        
-        .hero p {
-            font-size: 1.125rem;
-            color: rgba(255, 255, 255, 0.85);
-            margin-bottom: 32px;
-            max-width: 500px;
-        }
-        
-        .hero-buttons {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        
-        .hero-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 24px;
-            margin-top: 40px;
-        }
-        
-        .stat-card {
-            background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 20px;
+        }
+        @media (min-width: 640px) { .hero-badge { padding: 8px 20px; font-size: 0.875rem; margin-bottom: 24px; } }
+        .hero h1 { font-size: clamp(2rem, 6vw, 3.8rem); font-weight: 800; line-height: 1.15; color: white; margin-bottom: 16px; }
+        @media (min-width: 640px) { .hero h1 { margin-bottom: 20px; } }
+        .hero h1 span { color: var(--gold); }
+        .hero p { font-size: 1rem; color: rgba(255, 255, 255, 0.85); line-height: 1.7; max-width: 480px; }
+        @media (min-width: 640px) { .hero p { font-size: 1.125rem; } }
+
+        .hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (min-width: 640px) { .hero-stats { gap: 16px; } }
+        @media (min-width: 1024px) { .hero-stats { gap: 20px; } }
+        .stat-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 20px 16px;
             text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 0.3s ease, transform 0.3s ease;
         }
-        
-        .stat-number {
-            font-size: 2rem;
-            font-weight: 800;
-            color: var(--gold);
-        }
-        
-        .stat-label {
-            font-size: 0.875rem;
-            color: rgba(255, 255, 255, 0.7);
-        }
-        
-        /* Features Section */
-        .features {
-            padding: 80px 0;
-            background: white;
-        }
-        
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 32px;
-        }
-        
+        @media (min-width: 640px) { .stat-card { padding: 28px 24px; border-radius: 20px; } }
+        .stat-card:hover { background: rgba(255, 255, 255, 0.14); transform: translateY(-4px); }
+        .stat-number { font-size: 1.75rem; font-weight: 800; color: var(--gold); }
+        @media (min-width: 640px) { .stat-number { font-size: 2.2rem; } }
+        .stat-label { font-size: 0.75rem; color: rgba(255, 255, 255, 0.7); margin-top: 4px; font-weight: 500; }
+        @media (min-width: 640px) { .stat-label { font-size: 0.875rem; margin-top: 6px; } }
+
+        /* Features */
+        .features { padding: 60px 0; background: var(--white); }
+        @media (min-width: 640px) { .features { padding: 80px 0; } }
+        .features-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 640px) { .features-grid { grid-template-columns: repeat(2, 1fr); gap: 24px; } }
+        @media (min-width: 1024px) { .features-grid { grid-template-columns: repeat(3, 1fr); gap: 32px; } }
         .feature-card {
-            background: white;
+            background: var(--white);
             border: 1px solid var(--gray-200);
-            border-radius: 24px;
-            padding: 32px;
+            border-radius: 20px;
+            padding: 24px;
             transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
-        
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: var(--shadow-xl);
-            border-color: var(--gold);
-        }
-        
+        @media (min-width: 640px) { .feature-card { padding: 32px; border-radius: 24px; } }
+        .feature-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-xl); border-color: var(--gold); }
         .feature-icon {
-            width: 60px;
-            height: 60px;
+            width: 50px; height: 50px;
             background: linear-gradient(135deg, var(--maroon), var(--maroon-dark));
-            border-radius: 18px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
+            flex-shrink: 0;
         }
-        
-        .feature-icon i {
-            font-size: 28px;
-            color: white;
-        }
-        
-        .feature-card h3 {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--gray-800);
-        }
-        
-        .feature-card p {
-            color: var(--gray-600);
-            line-height: 1.6;
-        }
-        
+        @media (min-width: 640px) { .feature-icon { width: 60px; height: 60px; border-radius: 18px; margin-bottom: 24px; } }
+        .feature-icon i { font-size: 22px; color: white; }
+        @media (min-width: 640px) { .feature-icon i { font-size: 28px; } }
+        .feature-card h3 { font-size: 1.125rem; font-weight: 700; margin-bottom: 8px; color: var(--gray-800); }
+        @media (min-width: 640px) { .feature-card h3 { font-size: 1.25rem; margin-bottom: 12px; } }
+        .feature-card p { color: var(--gray-600); line-height: 1.7; font-size: 0.875rem; flex-grow: 1; }
+        @media (min-width: 640px) { .feature-card p { font-size: 1rem; } }
+
         /* How It Works */
-        .how-it-works {
-            background: var(--gray-50);
-            padding: 80px 0;
+        .how-it-works { background: var(--gray-50); padding: 60px 0; }
+        @media (min-width: 640px) { .how-it-works { padding: 80px 0; } }
+        .steps-grid { display: grid; grid-template-columns: 1fr; gap: 32px; }
+        @media (min-width: 640px) { .steps-grid { grid-template-columns: repeat(2, 1fr); gap: 40px; } }
+        @media (min-width: 768px) { .steps-grid { grid-template-columns: repeat(3, 1fr); gap: 40px; } }
+        @media (min-width: 640px) and (max-width: 767px) {
+            .step:last-child { grid-column: span 2; max-width: 50%; margin: 0 auto; }
         }
-        
-        .steps-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 32px;
-        }
-        
-        .step {
-            text-align: center;
-            padding: 32px;
-        }
-        
+        .step { text-align: center; padding: 24px 20px; }
+        @media (min-width: 640px) { .step { padding: 32px 24px; } }
         .step-number {
-            width: 60px;
-            height: 60px;
+            width: 56px; height: 56px;
             background: var(--gold);
-            color: var(--maroon);
-            font-size: 1.75rem;
+            color: var(--maroon-dark);
+            font-size: 1.5rem;
             font-weight: 800;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 20px;
+            margin: 0 auto 16px;
+            box-shadow: 0 4px 12px rgba(201, 168, 76, 0.3);
         }
-        
-        .step h3 {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-        }
-        
-        .step p {
-            color: var(--gray-600);
-        }
-        
-        /* FAQ Section */
-        .faq {
-            padding: 80px 0;
-            background: white;
-        }
-        
-        .faq-grid {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        
-        .faq-item {
-            border-bottom: 1px solid var(--gray-200);
-            padding: 20px 0;
-        }
-        
+        @media (min-width: 640px) { .step-number { width: 64px; height: 64px; font-size: 1.75rem; margin-bottom: 20px; } }
+        .step i { font-size: 32px; color: var(--gold); margin-bottom: 16px; display: block; }
+        @media (min-width: 640px) { .step i { font-size: 40px; margin-bottom: 20px; } }
+        .step h3 { font-size: 1.125rem; font-weight: 700; margin-bottom: 8px; }
+        @media (min-width: 640px) { .step h3 { font-size: 1.25rem; margin-bottom: 12px; } }
+        .step p { color: var(--gray-600); font-size: 0.875rem; }
+        @media (min-width: 640px) { .step p { font-size: 1rem; } }
+
+        /* FAQ */
+        .faq { padding: 60px 0; background: var(--white); }
+        @media (min-width: 640px) { .faq { padding: 80px 0; } }
+        .faq-grid { max-width: 800px; margin: 0 auto; }
+        .faq-item { border-bottom: 1px solid var(--gray-200); }
         .faq-question {
             display: flex;
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
             font-weight: 600;
-            font-size: 1.125rem;
-            padding: 8px 0;
+            font-size: 1rem;
+            padding: 20px 8px;
+            background: none;
+            border: none;
+            width: 100%;
+            text-align: left;
+            color: var(--gray-800);
+            transition: color 0.2s;
+            gap: 12px;
         }
-        
-        .faq-question i {
-            transition: transform 0.3s;
-        }
-        
-        .faq-question.active i {
-            transform: rotate(180deg);
-        }
-        
+        @media (min-width: 640px) { .faq-question { font-size: 1.125rem; padding: 24px 8px; } }
+        .faq-question:hover { color: var(--maroon); }
+        .faq-question i { font-size: 0.875rem; transition: transform 0.3s ease; color: var(--gray-600); flex-shrink: 0; }
+        .faq-question[aria-expanded="true"] i { transform: rotate(180deg); color: var(--maroon); }
         .faq-answer {
             max-height: 0;
             overflow: hidden;
-            transition: max-height 0.3s ease;
+            transition: max-height 0.4s ease-out, padding 0.4s ease-out;
             color: var(--gray-600);
-            line-height: 1.6;
-            padding-right: 24px;
+            line-height: 1.7;
+            padding: 0 8px;
+            padding-right: 32px;
+            font-size: 0.875rem;
         }
-        
-        .faq-answer.show {
-            max-height: 600px;
-            padding-top: 12px;
-        }
-        
-        /* Contact Section */
-        .contact {
-            padding: 80px 0;
-            background: var(--gray-50);
-        }
-        
+        @media (min-width: 640px) { .faq-answer { font-size: 1rem; } }
+        .faq-answer.open { max-height: 600px; padding-bottom: 20px; }
+
+        /* Contact */
+        .contact { padding: 60px 0; background: var(--gray-50); }
+        @media (min-width: 640px) { .contact { padding: 80px 0; } }
         .contact-wrapper {
             display: grid;
-            grid-template-columns: 1fr 1.5fr;
-            gap: 48px;
-            background: white;
-            border-radius: 32px;
+            grid-template-columns: 1fr;
+            background: var(--white);
+            border-radius: 24px;
             overflow: hidden;
             box-shadow: var(--shadow-xl);
         }
-        
-        .contact-info {
-            background: var(--maroon);
-            padding: 48px;
-            color: white;
-        }
-        
-        .contact-info h3 {
-            font-size: 1.75rem;
-            margin-bottom: 16px;
-        }
-        
-        .contact-details {
-            margin-top: 40px;
-        }
-        
-        .contact-detail {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        
+        @media (min-width: 768px) { .contact-wrapper { grid-template-columns: 1fr 1.5fr; border-radius: 32px; } }
+        .contact-info { background: var(--maroon); padding: 32px 24px; color: var(--white); }
+        @media (min-width: 640px) { .contact-info { padding: 40px; } }
+        @media (min-width: 768px) { .contact-info { padding: 48px; } }
+        .contact-info h3 { font-size: 1.5rem; margin-bottom: 12px; }
+        @media (min-width: 640px) { .contact-info h3 { font-size: 1.75rem; margin-bottom: 16px; } }
+        .contact-details { margin-top: 32px; display: flex; flex-direction: column; gap: 20px; }
+        @media (min-width: 640px) { .contact-details { margin-top: 40px; gap: 24px; } }
+        .contact-detail { display: flex; align-items: flex-start; gap: 14px; }
         .contact-detail i {
-            width: 40px;
-            height: 40px;
+            width: 40px; height: 40px;
             background: rgba(255, 255, 255, 0.15);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 18px;
+            font-size: 16px;
+            flex-shrink: 0;
         }
-        
-        .contact-form {
-            padding: 48px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: var(--gray-800);
-        }
-        
-        .form-group input,
-        .form-group textarea {
+        @media (min-width: 640px) { .contact-detail i { width: 44px; height: 44px; font-size: 18px; } }
+        .contact-form { padding: 32px 24px; }
+        @media (min-width: 640px) { .contact-form { padding: 40px; } }
+        @media (min-width: 768px) { .contact-form { padding: 48px; } }
+        .form-group { margin-bottom: 20px; }
+        @media (min-width: 640px) { .form-group { margin-bottom: 24px; } }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.875rem; color: var(--gray-800); }
+        .form-group input, .form-group textarea {
             width: 100%;
             padding: 12px 16px;
             border: 1px solid var(--gray-300);
             border-radius: 12px;
             font-family: inherit;
-            font-size: 1rem;
+            font-size: 16px;
             transition: all 0.2s;
+            background: var(--gray-50);
+            -webkit-appearance: none;
+            appearance: none;
         }
-        
-        .form-group input:focus,
-        .form-group textarea:focus {
+        .form-group input:focus, .form-group textarea:focus {
             outline: none;
             border-color: var(--maroon);
             box-shadow: 0 0 0 3px rgba(128, 0, 32, 0.1);
+            background: var(--white);
         }
-        
-        .alert-success {
-            background: #d1fae5;
-            border: 1px solid #6ee7b7;
-            color: #065f46;
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-        }
-        
-        .alert-error {
-            background: #fee2e2;
-            border: 1px solid #fecaca;
-            color: #991b1b;
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-        }
-        
+        .form-group textarea { resize: vertical; min-height: 100px; }
+        .alert-success, .alert-error { padding: 14px 16px; border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-weight: 500; font-size: 0.875rem; }
+        .alert-success { background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; }
+        .alert-error { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+        .inline-error { color: #dc2626; font-size: 0.75rem; margin-top: 4px; font-weight: 500; }
+
         /* Chatbot */
-        .chatbot-btn {
+        .chatbot-toggle {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 60px;
-            height: 60px;
+            bottom: 20px; right: 20px;
+            width: 56px; height: 56px;
             background: var(--maroon);
             border-radius: 50%;
             display: flex;
@@ -687,835 +598,702 @@ $year = date('Y');
             transition: all 0.3s;
             z-index: 1000;
             border: none;
+            color: var(--white);
+            font-size: 24px;
         }
-        
-        .chatbot-btn:hover {
-            transform: scale(1.1);
-            background: var(--maroon-dark);
-        }
-        
-        .chatbot-btn i {
-            font-size: 28px;
-            color: white;
-        }
-        
+        .chatbot-toggle:hover { transform: scale(1.1); background: var(--maroon-dark); }
         .chatbot-window {
             position: fixed;
-            bottom: 100px;
-            right: 24px;
-            width: 380px;
-            height: 500px;
-            background: white;
+            bottom: 90px; right: 20px;
+            width: calc(100vw - 40px);
+            max-width: 380px;
+            height: 480px;
+            max-height: calc(100vh - 140px);
+            background: var(--white);
             border-radius: 20px;
             box-shadow: var(--shadow-xl);
             display: none;
             flex-direction: column;
-            z-index: 1000;
+            z-index: 999;
             overflow: hidden;
-            animation: slideUp 0.3s ease;
         }
-        
-        .chatbot-window.open {
-            display: flex;
-        }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .chatbot-header {
-            background: var(--maroon);
-            color: white;
-            padding: 16px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .chatbot-header h4 {
-            font-size: 1rem;
-            font-weight: 600;
-        }
-        
-        .chatbot-header button {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 20px;
-            cursor: pointer;
-        }
-        
-        .chatbot-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            background: var(--gray-50);
-        }
-        
-        .message {
-            max-width: 85%;
-            padding: 10px 14px;
-            border-radius: 18px;
-            font-size: 14px;
-            line-height: 1.4;
-        }
-        
-        .message-bot {
-            background: white;
-            color: var(--gray-800);
-            align-self: flex-start;
-            border: 1px solid var(--gray-200);
-            border-bottom-left-radius: 4px;
-        }
-        
-        .message-user {
-            background: var(--maroon);
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
-        }
-        
-        .chatbot-input {
-            padding: 16px;
-            border-top: 1px solid var(--gray-200);
-            display: flex;
-            gap: 12px;
-            background: white;
-        }
-        
-        .chatbot-input input {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid var(--gray-300);
-            border-radius: 25px;
-            font-family: inherit;
-            font-size: 14px;
-        }
-        
-        .chatbot-input input:focus {
-            outline: none;
-            border-color: var(--maroon);
-        }
-        
-        .chatbot-input button {
-            background: var(--maroon);
-            border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            color: white;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        .chatbot-input button:hover {
-            background: var(--maroon-dark);
-        }
-        
-        .typing-indicator {
-            display: flex;
-            gap: 4px;
-            padding: 10px 14px;
-            background: white;
-            border-radius: 18px;
-            width: fit-content;
-            border: 1px solid var(--gray-200);
-        }
-        
-        .typing-indicator span {
-            width: 8px;
-            height: 8px;
-            background: var(--gray-400);
-            border-radius: 50%;
-            animation: typing 1.4s infinite;
-        }
-        
-        .typing-indicator span:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-        
-        .typing-indicator span:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-        
-        @keyframes typing {
-            0%, 60%, 100% {
-                transform: translateY(0);
-                opacity: 0.4;
-            }
-            30% {
-                transform: translateY(-8px);
-                opacity: 1;
-            }
-        }
-        
+        .chatbot-window.active { display: flex; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .chatbot-header { background: var(--maroon); color: white; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .chatbot-header h4 { font-size: 0.9375rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .chatbot-header button { background: none; border: none; color: white; font-size: 18px; cursor: pointer; padding: 8px; border-radius: 8px; }
+        .chatbot-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--gray-50); -webkit-overflow-scrolling: touch; }
+        .message { max-width: 85%; padding: 10px 14px; border-radius: 18px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+        .message-bot { background: white; color: var(--gray-800); align-self: flex-start; border: 1px solid var(--gray-200); border-bottom-left-radius: 4px; }
+        .message-user { background: var(--maroon); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        .chatbot-input-area { padding: 12px 14px; border-top: 1px solid var(--gray-200); display: flex; gap: 10px; background: white; flex-shrink: 0; }
+        .chatbot-input-area input { flex: 1; padding: 10px 14px; border: 1px solid var(--gray-300); border-radius: 25px; font-family: inherit; font-size: 16px; -webkit-appearance: none; }
+        .chatbot-input-area button { background: var(--maroon); border: none; width: 44px; height: 44px; border-radius: 50%; color: white; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+
         /* Footer */
-        .footer {
-            background: #1a1a2e;
-            color: white;
-            padding: 48px 0 24px;
+        .footer { background: #1a1a2e; color: rgba(255, 255, 255, 0.7); padding: 48px 0 24px; }
+        @media (min-width: 640px) { .footer { padding: 60px 0 24px; } }
+        .footer-grid { display: grid; grid-template-columns: 1fr; gap: 32px; margin-bottom: 40px; }
+        @media (min-width: 640px) { .footer-grid { grid-template-columns: repeat(2, 1fr); gap: 40px; margin-bottom: 48px; } }
+        @media (min-width: 768px) { .footer-grid { grid-template-columns: 2fr 1fr 1fr; gap: 48px; } }
+        @media (min-width: 640px) and (max-width: 767px) {
+            .footer-brand { grid-column: span 2; }
         }
-        
-        .footer-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 48px;
-            margin-bottom: 48px;
-        }
-        
-        .footer-logo .logo-icon {
-            background: white;
-        }
-        
-        .footer-logo p {
-            margin-top: 16px;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 14px;
-        }
-        
-        .footer-links h4 {
-            margin-bottom: 16px;
-            font-size: 1rem;
-        }
-        
-        .footer-links a {
-            display: block;
-            color: rgba(255, 255, 255, 0.6);
-            text-decoration: none;
-            margin-bottom: 10px;
-            font-size: 14px;
-            transition: color 0.2s;
-        }
-        
-        .footer-links a:hover {
-            color: var(--gold);
-        }
-        
-        .footer-bottom {
-            text-align: center;
-            padding-top: 24px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container { padding: 0 16px; }
-            .nav-links, .nav-buttons { display: none; }
-            .mobile-menu-btn { display: block; }
-            .section-title { font-size: 1.75rem; }
-            .contact-wrapper { grid-template-columns: 1fr; }
-            .chatbot-window { width: calc(100vw - 48px); right: 24px; height: 480px; }
-        }
+        .footer-brand p { margin-top: 16px; font-size: 0.875rem; line-height: 1.6; color: rgba(255, 255, 255, 0.5); }
+        .footer-links h4 { color: var(--white); margin-bottom: 16px; font-size: 0.9375rem; font-weight: 600; }
+        @media (min-width: 640px) { .footer-links h4 { margin-bottom: 20px; font-size: 1rem; } }
+        .footer-links ul { list-style: none; }
+        .footer-links a { display: block; color: rgba(255, 255, 255, 0.5); text-decoration: none; margin-bottom: 10px; font-size: 0.875rem; transition: color 0.2s; }
+        .footer-links a:hover { color: var(--gold); }
+        .footer-bottom { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 0.8125rem; text-align: center; }
+        @media (min-width: 640px) { .footer-bottom { flex-direction: row; justify-content: space-between; font-size: 0.875rem; text-align: left; } }
+        .footer-bottom a { color: rgba(255, 255, 255, 0.4); text-decoration: none; font-size: 0.8125rem; transition: color 0.2s; }
+        .footer-bottom a:hover { color: var(--gold); }
+        .footer-legal { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+        @media (min-width: 640px) { .footer-legal { justify-content: flex-end; } }
+
+        /* Accessibility */
+        a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--maroon-light); outline-offset: 2px; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+        img, video, iframe, table { max-width: 100%; height: auto; }
 
         @media (max-width: 480px) {
-            .features-grid { grid-template-columns: 1fr; }
-            .steps-grid { grid-template-columns: 1fr; }
+            .hero-stats { gap: 10px; }
+            .stat-card { padding: 16px 12px; border-radius: 14px; }
+            .stat-number { font-size: 1.35rem; }
+            .stat-label { font-size: 0.6875rem; }
         }
     </style>
 </head>
 <body>
 
-<!-- Header -->
-<header class="header">
-    <div class="container">
-        <div class="header-content">
-            <!-- Left: Logo -->
-            <div class="logo">
-                <div class="logo-icon">
-                    <img src="assets/images/clinic logo.jpg" alt="PUPBC Carelink Clinic Logo">
-                </div>
-                <div class="logo-text">PUPBC <span>Carelink</span></div>
+<!-- ============================================
+     HEADER & NAVIGATION
+     ============================================ -->
+<header class="header" role="banner">
+    <div class="container header-content">
+        <!-- Logo -->
+        <a href="/capstone1/index.php" class="logo" aria-label="PUPBC Carelink Homepage">
+            <div class="logo-icon">
+                <img src="assets/images/clinic logo.jpg" alt="PUPBC Carelink Clinic Logo" width="42" height="42" loading="eager">
             </div>
+            <div class="logo-text">PUPBC <span>Carelink</span></div>
+        </a>
 
-            <!-- Right: Nav links + Buttons grouped together -->
-            <div class="header-right">
-                <nav class="nav-links">
-                    <a href="#home">Home</a>
-                    <a href="#features">Features</a>
-                    <a href="#how-it-works">How It Works</a>
-                    <a href="#faq">FAQ</a>
-                    <a href="#contact">Contact</a>
-                </nav>
-                <div class="nav-buttons">
-                    <a href="pages/student/student_login.php" class="btn-outline">Sign In</a>
-                    <a href="pages/student/student_register.php" class="btn-primary">Get Started</a>
-                </div>
-            </div>
-
-            <!-- Mobile hamburger -->
-            <button class="mobile-menu-btn" id="mobileMenuBtn">
-                <i class="fas fa-bars"></i>
-            </button>
-        </div>
-    </div>
-</header>
-
-<!-- Hero Section -->
-<section id="home" class="hero">
-    <div class="container">
-        <div class="hero-content">
-            <div>
-                <div class="hero-badge">
-                    <i class="fas fa-map-marker-alt"></i>
-                    Now Serving PUP Binan Campus
-                </div>
-                <h1>Scan. Care.<br><span>Connect.</span></h1>
-                <p>QR-integrated health information system that brings the campus clinic into the digital age — faster check-ins, paperless records, and real-time insights.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Features Section -->
-<section id="features" class="features">
-    <div class="container">
-        <h2 class="section-title">Everything the clinic needs, in one place</h2>
-        <p class="section-subtitle">From front desk to nurse's station, Carelink streamlines every interaction</p>
-        
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon"><i class="fas fa-qrcode"></i></div>
-                <h3>QR-Based Identity</h3>
-                <p>Every student gets a unique encrypted Carelink QR for instant clinic check-in.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><i class="fas fa-clipboard-list"></i></div>
-                <h3>Digital Health Records</h3>
-                <p>Allergies, conditions, vitals, and visit history kept in one secure place.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><i class="fas fa-stethoscope"></i></div>
-                <h3>Smart Nurse Dashboard</h3>
-                <p>Live queue, SOAP notes, prescriptions, and inventory in a single workspace.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
-                <h3>Privacy-First</h3>
-                <p>Aligned with Data Privacy Act of 2012 (RA 10173). Encrypted tokens, audit logs, role-based access.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
-                <h3>Health Analytics</h3>
-                <p>Spot symptom trends and outbreaks early with real-time campus health insights.</p>
-            </div>
-            <div class="feature-card">
-                <div class="feature-icon"><i class="fas fa-microchip"></i></div>
-                <h3>Self-Service Kiosk</h3>
-                <p>Touchscreen check-in that cuts queue time to under 30 seconds.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- How It Works -->
-<section id="how-it-works" class="how-it-works">
-    <div class="container">
-        <h2 class="section-title">How Carelink works</h2>
-        <p class="section-subtitle">Three simple steps from sign-up to consultation</p>
-        
-        <div class="steps-grid">
-            <div class="step">
-                <div class="step-number">1</div>
-                <i class="fas fa-user-plus" style="font-size: 40px; color: var(--gold); margin-bottom: 20px; display: block;"></i>
-                <h3>Register</h3>
-                <p>Students enroll once and receive a unique Carelink QR code linked to their secure profile.</p>
-            </div>
-            <div class="step">
-                <div class="step-number">2</div>
-                <i class="fas fa-qrcode" style="font-size: 40px; color: var(--gold); margin-bottom: 20px; display: block;"></i>
-                <h3>Scan & Check-in</h3>
-                <p>Scan at the kiosk or web portal. Log symptoms and join the queue in seconds.</p>
-            </div>
-            <div class="step">
-                <div class="step-number">3</div>
-                <i class="fas fa-heartbeat" style="font-size: 40px; color: var(--gold); margin-bottom: 20px; display: block;"></i>
-                <h3>Get Care</h3>
-                <p>Nurses pull up records instantly, document the visit, and dispense medicine — all paperless.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- FAQ Section -->
-<section id="faq" class="faq">
-    <div class="container">
-        <h2 class="section-title">Frequently Asked Questions</h2>
-        <p class="section-subtitle">Find answers to common questions about PUPBC Carelink</p>
-        
-        <div class="faq-grid">
-            <div class="faq-item">
-                <div class="faq-question">
-                    How do I get my Carelink QR code?
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                <div class="faq-answer">
-                    Once you register through the student portal, your unique encrypted Carelink QR code will be generated and available on your dashboard. You can download or print it from there.
-                </div>
-            </div>
-            <div class="faq-item">
-                <div class="faq-question">
-                    Is my medical information secure?
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                <div class="faq-answer">
-                    Yes, your data is protected and strictly follows the Data Privacy Act of 2012 (RA 10173). Only authorized clinic staff can view your health records. All data is encrypted and stored securely.
-                </div>
-            </div>
-            <div class="faq-item">
-                <div class="faq-question">
-                    What if I lose my Carelink ID?
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                <div class="faq-answer">
-                    You can easily access and re-download your digital Carelink QR code anytime by logging into the student portal. The old QR code will be invalidated for security.
-                </div>
-            </div>
-            <div class="faq-item">
-                <div class="faq-question">
-                    Can I book appointments online?
-                    <i class="fas fa-chevron-down"></i>
-                </div>
-                <div class="faq-answer">
-                    Yes! Students can book appointments through the student portal. You'll receive email confirmation and reminders for your scheduled appointments.
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Contact Section -->
-<section id="contact" class="contact">
-    <div class="container">
-        <div class="contact-wrapper">
-            <div class="contact-info">
-                <h3>Contact Us</h3>
-                <p>Get in touch with the PUPBC Clinic for inquiries or assistance.</p>
-                
-                <div class="contact-details">
-                    <div class="contact-detail">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <div>
-                            <strong>Location</strong><br>
-                            Brgy. Zapote, Biñan City, Laguna
-                        </div>
-                    </div>
-                    <div class="contact-detail">
-                        <i class="fas fa-envelope"></i>
-                        <div>
-                            <strong>Email</strong><br>
-                            clinic.binan@pup.edu.ph
-                        </div>
-                    </div>
-                    <div class="contact-detail">
-                        <i class="fas fa-phone"></i>
-                        <div>
-                            <strong>Phone</strong><br>
-                            (049) 123-4567
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="contact-form">
-                <?php if ($contact_success): ?>
-                    <div class="alert-success">
-                        <i class="fas fa-check-circle"></i> <?php echo htmlspecialchars($contact_success); ?>
-                    </div>
-                <?php endif; ?>
-                
-                <?php if ($contact_error): ?>
-                    <div class="alert-error">
-                        <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($contact_error, ENT_QUOTES, 'UTF-8'); ?>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (!$contact_success): ?>
-                <form method="POST" id="contactForm" novalidate>
-                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
-                    <input type="text" name="bot_check" style="display:none;" tabindex="-1" autocomplete="off">
-                    
-                    <div class="form-group">
-                        <label for="contact_name">Your Name <span style="color: var(--maroon);">*</span></label>
-                        <input type="text" id="contact_name" name="name" value="<?php echo htmlspecialchars($name); ?>" required placeholder="Juan Dela Cruz" autocomplete="name">
-                    </div>
-                    <div class="form-group">
-                        <label for="contact_email">Email Address <span style="color: var(--maroon);">*</span></label>
-                        <input type="email" id="contact_email" name="email" value="<?php echo htmlspecialchars($email); ?>" required placeholder="juan@example.com" autocomplete="email">
-                    </div>
-                    <div class="form-group">
-                        <label for="contact_message">Message <span style="color: var(--maroon);">*</span></label>
-                        <textarea id="contact_message" name="message" rows="4" required placeholder="How can we help you?"><?php echo htmlspecialchars($message); ?></textarea>
-                    </div>
-                    <button type="submit" name="contact_submit" class="btn-primary" style="width: 100%; justify-content: center;">
-                        <i class="fas fa-paper-plane"></i> Send Message
-                    </button>
-                </form>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- Footer -->
-<footer class="footer">
-    <div class="container">
-        <div class="footer-content">
-            <div class="footer-logo">
-                <div class="logo" style="margin-bottom: 16px;">
-                    <div class="logo-icon">
-                        <img src="assets/images/clinic logo.jpg" alt="PUPBC Carelink Clinic Logo">
-                    </div>
-                    <div class="logo-text" style="color: white;">PUPBC <span style="color: var(--gold);">Carelink</span></div>
-                </div>
-                <p>QR-integrated health information system for PUP Binan Campus.</p>
-            </div>
-            <div class="footer-links">
-                <h4>Quick Links</h4>
+        <!-- Desktop Navigation -->
+        <div class="header-right" id="desktopNav">
+            <nav class="nav-links" aria-label="Main Navigation">
                 <a href="#home">Home</a>
                 <a href="#features">Features</a>
                 <a href="#how-it-works">How It Works</a>
                 <a href="#faq">FAQ</a>
+                <a href="#contact">Contact</a>
+            </nav>
+            <div class="nav-buttons">
+                <a href="pages/student/student_login.php" class="btn-outline">Sign In</a>
+                <a href="pages/student/student_register.php" class="btn-primary">Get Started</a>
+            </div>
+        </div>
+
+        <!-- Mobile Menu Button -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobileMenu">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+        </button>
+    </div>
+</header>
+
+    <!-- Overlay for mobile menu -->
+    <div class="menu-overlay" id="menuOverlay"></div>
+
+    <!-- Mobile Menu Container -->
+    <div class="mobile-menu" id="mobileMenu" role="navigation" aria-label="Mobile Navigation">
+        <div class="mobile-menu-inner">
+            <!-- Navigation Links -->
+            <nav class="mobile-nav-links">
+                <a href="#home" class="mobile-nav-link">
+                    <i class="fas fa-home"></i> Home
+                </a>
+                <a href="#features" class="mobile-nav-link">
+                    <i class="fas fa-star"></i> Features
+                </a>
+                <a href="#how-it-works" class="mobile-nav-link">
+                    <i class="fas fa-cogs"></i> How It Works
+                </a>
+                <a href="#faq" class="mobile-nav-link">
+                    <i class="fas fa-question-circle"></i> FAQ
+                </a>
+                <a href="#contact" class="mobile-nav-link">
+                    <i class="fas fa-envelope"></i> Contact
+                </a>
+            </nav>
+            
+            <!-- Divider -->
+            <div class="mobile-menu-divider"></div>
+            
+            <!-- Action Buttons -->
+            <div class="mobile-menu-buttons">
+                <a href="pages/student/student_login.php" class="mobile-btn-outline">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </a>
+                <a href="pages/student/student_register.php" class="mobile-btn-primary">
+                    <i class="fas fa-user-plus"></i> Get Started
+                </a>
+            </div>
+        </div>
+    </div>
+
+<main id="main-content">
+    <!-- ============================================
+         HERO SECTION
+         ============================================ -->
+    <section id="home" class="hero" aria-labelledby="hero-heading">
+        <div class="container">
+            <div class="hero-grid">
+                <div class="hero-text">
+                    <div class="hero-badge" aria-label="Location Badge">
+                        <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                        Now Serving PUP Binan Campus
+                    </div>
+                    <h1 id="hero-heading">Scan. Care.<br><span>Connect.</span></h1>
+                    <p>QR-integrated health information system that brings the campus clinic into the digital age — faster check-ins, paperless records, and real-time insights.</p>
+                </div>
+
+                <div class="hero-stats">
+                    <div class="stat-card">
+                        <div class="stat-number">30s</div>
+                        <div class="stat-label">Average Check-in Time</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">100%</div>
+                        <div class="stat-label">Paperless Records</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">24/7</div>
+                        <div class="stat-label">Portal Access</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">RA 10173</div>
+                        <div class="stat-label">Data Privacy Compliant</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         FEATURES SECTION
+         ============================================ -->
+    <section id="features" class="features" aria-labelledby="features-heading">
+        <div class="container">
+            <h2 class="section-title" id="features-heading">Everything the clinic needs, in one place</h2>
+            <p class="section-subtitle">From front desk to nurse's station, Carelink streamlines every interaction</p>
+            
+            <div class="features-grid">
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true"><i class="fas fa-qrcode"></i></div>
+                    <h3>QR-Based Identity</h3>
+                    <p>Every student gets a unique encrypted Carelink QR for instant clinic check-in.</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true"><i class="fas fa-clipboard-list"></i></div>
+                    <h3>Digital Health Records</h3>
+                    <p>Allergies, conditions, vitals, and visit history kept in one secure place.</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true"><i class="fas fa-stethoscope"></i></div>
+                    <h3>Smart Nurse Dashboard</h3>
+                    <p>Live queue, SOAP notes, prescriptions, and inventory in a single workspace.</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true"><i class="fas fa-shield-alt"></i></div>
+                    <h3>Privacy-First</h3>
+                    <p>Aligned with Data Privacy Act of 2012 (RA 10173). Encrypted tokens, audit logs, role-based access.</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true"><i class="fas fa-chart-line"></i></div>
+                    <h3>Health Analytics</h3>
+                    <p>Spot symptom trends and outbreaks early with real-time campus health insights.</p>
+                </article>
+                <article class="feature-card">
+                    <div class="feature-icon" aria-hidden="true"><i class="fas fa-microchip"></i></div>
+                    <h3>Self-Service Kiosk</h3>
+                    <p>Touchscreen check-in that cuts queue time to under 30 seconds.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         HOW IT WORKS SECTION
+         ============================================ -->
+    <section id="how-it-works" class="how-it-works" aria-labelledby="how-heading">
+        <div class="container">
+            <h2 class="section-title" id="how-heading">How Carelink works</h2>
+            <p class="section-subtitle">Three simple steps from sign-up to consultation</p>
+            
+            <div class="steps-grid">
+                <div class="step">
+                    <div class="step-number" aria-hidden="true">1</div>
+                    <i class="fas fa-user-plus" aria-hidden="true"></i>
+                    <h3>Register</h3>
+                    <p>Students enroll once and receive a unique Carelink QR code linked to their secure profile.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number" aria-hidden="true">2</div>
+                    <i class="fas fa-qrcode" aria-hidden="true"></i>
+                    <h3>Scan & Check-in</h3>
+                    <p>Scan at the kiosk or web portal. Log symptoms and join the queue in seconds.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number" aria-hidden="true">3</div>
+                    <i class="fas fa-heartbeat" aria-hidden="true"></i>
+                    <h3>Get Care</h3>
+                    <p>Nurses pull up records instantly, document the visit, and dispense medicine — all paperless.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         FAQ SECTION
+         ============================================ -->
+    <section id="faq" class="faq" aria-labelledby="faq-heading">
+        <div class="container">
+            <h2 class="section-title" id="faq-heading">Frequently Asked Questions</h2>
+            <p class="section-subtitle">Find answers to common questions about PUPBC Carelink</p>
+            
+            <div class="faq-grid" role="list">
+                <div class="faq-item" role="listitem">
+                    <button class="faq-question" aria-expanded="false" id="faq-btn-1">
+                        <span>How do I get my Carelink QR code?</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="faq-answer" role="region" aria-labelledby="faq-btn-1">
+                        <p>Once you register through the student portal, your unique encrypted Carelink QR code will be generated and available on your dashboard. You can download or print it from there.</p>
+                    </div>
+                </div>
+                <div class="faq-item" role="listitem">
+                    <button class="faq-question" aria-expanded="false" id="faq-btn-2">
+                        <span>Is my medical information secure?</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="faq-answer" role="region" aria-labelledby="faq-btn-2">
+                        <p>Yes, your data is protected and strictly follows the Data Privacy Act of 2012 (RA 10173). Only authorized clinic staff can view your health records. All data is encrypted and stored securely.</p>
+                    </div>
+                </div>
+                <div class="faq-item" role="listitem">
+                    <button class="faq-question" aria-expanded="false" id="faq-btn-3">
+                        <span>What if I lose my Carelink ID?</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="faq-answer" role="region" aria-labelledby="faq-btn-3">
+                        <p>You can easily access and re-download your digital Carelink QR code anytime by logging into the student portal. The old QR code will be invalidated for security.</p>
+                    </div>
+                </div>
+                <div class="faq-item" role="listitem">
+                    <button class="faq-question" aria-expanded="false" id="faq-btn-4">
+                        <span>Can I book appointments online?</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="faq-answer" role="region" aria-labelledby="faq-btn-4">
+                        <p>Yes! Students can book appointments through the student portal. You'll receive email confirmation and reminders for your scheduled appointments.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================
+         CONTACT SECTION
+         ============================================ -->
+    <section id="contact" class="contact" aria-labelledby="contact-heading">
+        <div class="container">
+            <div class="contact-wrapper">
+                <div class="contact-info">
+                    <h3 id="contact-heading">Contact Us</h3>
+                    <p>Get in touch with the PUPBC Clinic for inquiries or assistance.</p>
+                    
+                    <div class="contact-details">
+                        <div class="contact-detail">
+                            <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                            <div>
+                                <strong>Location</strong><br>
+                                Brgy. Zapote, Biñan City, Laguna
+                            </div>
+                        </div>
+                        <div class="contact-detail">
+                            <i class="fas fa-envelope" aria-hidden="true"></i>
+                            <div>
+                                <strong>Email</strong><br>
+                                clinic.binan@pup.edu.ph
+                            </div>
+                        </div>
+                        <div class="contact-detail">
+                            <i class="fas fa-phone" aria-hidden="true"></i>
+                            <div>
+                                <strong>Phone</strong><br>
+                                (049) 123-4567
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="contact-form">
+                    <?php if ($contact_success): ?>
+                        <div class="alert-success" role="alert">
+                            <i class="fas fa-check-circle" aria-hidden="true"></i> 
+                            <span><?php echo htmlspecialchars($contact_success, ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($contact_error): ?>
+                        <div class="alert-error" role="alert">
+                            <i class="fas fa-exclamation-circle" aria-hidden="true"></i> 
+                            <span><?php echo htmlspecialchars($contact_error, ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!$contact_success): ?>
+                    <form method="POST" id="contactForm" novalidate>
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="text" name="bot_check" class="visually-hidden" tabindex="-1" autocomplete="off" aria-hidden="true">
+                        
+                        <div class="form-group">
+                            <label for="contact_name">Your Name <span style="color: var(--maroon);">*</span></label>
+                            <input type="text" id="contact_name" name="name" value="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="Juan Dela Cruz" autocomplete="name" aria-required="true">
+                        </div>
+                        <div class="form-group">
+                            <label for="contact_email">Email Address <span style="color: var(--maroon);">*</span></label>
+                            <input type="email" id="contact_email" name="email" value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="juan@example.com" autocomplete="email" aria-required="true">
+                        </div>
+                        <div class="form-group">
+                            <label for="contact_message">Message <span style="color: var(--maroon);">*</span></label>
+                            <textarea id="contact_message" name="message" rows="5" required placeholder="How can we help you?" aria-required="true"><?php echo htmlspecialchars($message, ENT_QUOTES, 'UTF-8'); ?></textarea>
+                        </div>
+                        <button type="submit" name="contact_submit" class="btn-primary" style="width: 100%; justify-content: center;">
+                            <i class="fas fa-paper-plane" aria-hidden="true"></i> Send Message
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </section>
+</main>
+
+<!-- ============================================
+     FOOTER
+     ============================================ -->
+<footer class="footer" role="contentinfo">
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-brand">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <img src="assets/images/clinic logo.jpg" alt="PUPBC Carelink Logo" width="42" height="42" loading="lazy">
+                    </div>
+                    <div class="logo-text" style="color: white;">PUPBC <span style="color: var(--gold);">Carelink</span></div>
+                </div>
+                <p>QR-integrated health information system for PUP Binan Campus. Bringing faster check-ins, paperless records, and real-time insights.</p>
+            </div>
+            <div class="footer-links">
+                <h4>Quick Links</h4>
+                <nav aria-label="Footer Quick Links">
+                    <ul>
+                        <li><a href="#home">Home</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#how-it-works">How It Works</a></li>
+                        <li><a href="#faq">FAQ</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                    </ul>
+                </nav>
             </div>
             <div class="footer-links">
                 <h4>Student Portal</h4>
-                <a href="pages/student/student_login.php">Sign In</a>
-                <a href="pages/student/student_register.php">Register</a>
+                <nav aria-label="Footer Student Links">
+                    <ul>
+                        <li><a href="pages/student/student_login.php">Sign In</a></li>
+                        <li><a href="pages/student/student_register.php">Register</a></li>
+                    </ul>
+                </nav>
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; <?php echo $year; ?> PUPBC Carelink. Now Serving PUP Binan Campus. All rights reserved.</p>
+            <p>&copy; <?php echo $year; ?> PUPBC Carelink. All rights reserved.</p>
+            <div class="footer-legal">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Use</a>
+                <a href="#">Data Privacy Notice</a>
+            </div>
         </div>
     </div>
 </footer>
 
-<!-- AI Chatbot Button -->
-<button class="chatbot-btn" id="chatbotBtn">
-    <i class="fas fa-robot"></i>
+<!-- ============================================
+     AI CHATBOT
+     ============================================ -->
+<button class="chatbot-toggle" id="chatbotToggle" aria-label="Open chat assistant" aria-expanded="false" aria-controls="chatbotWindow">
+    <i class="fas fa-robot" aria-hidden="true"></i>
 </button>
 
-<!-- AI Chatbot Window -->
-<div class="chatbot-window" id="chatbotWindow">
+<div class="chatbot-window" id="chatbotWindow" role="dialog" aria-modal="true" aria-labelledby="chatbotTitle">
     <div class="chatbot-header">
-        <h4><img src="assets/images/clinic logo.jpg" alt="" style="width:22px;height:22px;border-radius:4px;object-fit:cover;vertical-align:middle;margin-right:6px;"> Carelink Assistant</h4>
-        <button id="closeChatbotBtn"><i class="fas fa-times"></i></button>
+        <h4 id="chatbotTitle">
+            <img src="assets/images/clinic logo.jpg" alt="" width="22" height="22" style="border-radius:4px; object-fit:cover;" loading="lazy" aria-hidden="true">
+            Carelink Assistant
+        </h4>
+        <button id="closeChatbot" aria-label="Close chat assistant">
+            <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
     </div>
-    <div class="chatbot-messages" id="chatMessages">
+    <div class="chatbot-messages" id="chatMessages" role="log" aria-live="polite">
         <div class="message message-bot">
             Hello! I'm Carelink Assistant. How can I help you today?
         </div>
         <div class="message message-bot">
             You can ask me about:<br>
-            &bull; How to register<br>
-            &bull; Getting your QR code<br>
-            &bull; Booking appointments<br>
-            &bull; Clinic hours and location<br>
-            &bull; Using the kiosk
+            • How to register<br>
+            • Getting your QR code<br>
+            • Booking appointments<br>
+            • Clinic hours and location<br>
+            • Using the kiosk
         </div>
     </div>
-    <div class="chatbot-input">
-        <input type="text" id="chatInput" placeholder="Type your question here..." autocomplete="off">
-        <button id="sendChatBtn"><i class="fas fa-paper-plane"></i></button>
+    <div class="chatbot-input-area">
+        <input type="text" id="chatInput" placeholder="Type your question here..." autocomplete="off" aria-label="Message input">
+        <button id="sendChatBtn" aria-label="Send message">
+            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        </button>
     </div>
 </div>
 
 <script>
-    // Mobile menu toggle
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const navLinks = document.querySelector('.nav-links');
-    const navButtons = document.querySelector('.nav-buttons');
-    let mobileMenuOpen = false;
-
-    function closeMobileMenu() {
-        mobileMenuOpen = false;
-        navLinks.classList.remove('mobile-nav-open');
-        navButtons.classList.remove('mobile-btns-open');
-        // Reset inline styles set by previous toggle logic (if any)
-        navLinks.style.cssText = '';
-        navButtons.style.cssText = '';
-        mobileMenuBtn.querySelector('i').className = 'fas fa-bars';
-    }
-
-    if (mobileMenuBtn) {
+    document.addEventListener('DOMContentLoaded', function() {
+        // ============================================
+        // MOBILE NAVIGATION
+        // ============================================
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+        const menuOverlay = document.getElementById('menuOverlay');
+        const body = document.body;
+        
+        function openMobileMenu() {
+            mobileMenu.classList.add('active');
+            menuOverlay.classList.add('active');
+            mobileMenuBtn.setAttribute('aria-expanded', 'true');
+            mobileMenuBtn.querySelector('i').className = 'fas fa-times';
+            body.style.overflow = 'hidden';
+        }
+        
+        function closeMobileMenu() {
+            mobileMenu.classList.remove('active');
+            menuOverlay.classList.remove('active');
+            mobileMenuBtn.setAttribute('aria-expanded', 'false');
+            mobileMenuBtn.querySelector('i').className = 'fas fa-bars';
+            body.style.overflow = '';
+        }
+        
         mobileMenuBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            mobileMenuOpen = !mobileMenuOpen;
-            if (mobileMenuOpen) {
-                navLinks.classList.add('mobile-nav-open');
-                // Position navButtons directly below navLinks
-                navButtons.style.display = 'flex';
-                navButtons.style.flexDirection = 'column';
-                navButtons.style.position = 'absolute';
-                navButtons.style.left = '0';
-                navButtons.style.right = '0';
-                navButtons.style.top = (navLinks.offsetTop + navLinks.offsetHeight) + 'px';
-                navButtons.style.background = 'white';
-                navButtons.style.padding = '0 24px 24px';
-                navButtons.style.gap = '12px';
-                navButtons.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
-                navButtons.style.zIndex = '98';
-                
-                // Remove shadow from navLinks when menu is open to blend them
-                navLinks.style.boxShadow = 'none';
-                
-                mobileMenuBtn.querySelector('i').className = 'fas fa-times';
+            if (mobileMenu.classList.contains('active')) {
+                closeMobileMenu();
             } else {
-                closeMobileMenu();
+                openMobileMenu();
             }
         });
-
-        // Close menu when a nav link is clicked
-        navLinks.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', () => closeMobileMenu());
-        });
-
-        // Close menu when clicking outside
-        document.addEventListener('click', function(e) {
-            if (mobileMenuOpen && !e.target.closest('.header')) {
-                closeMobileMenu();
-            }
-        });
-    }
-    
-    // FAQ Accordion
-    document.querySelectorAll('.faq-question').forEach(question => {
-        question.addEventListener('click', () => {
-            const answer = question.nextElementSibling;
-            const isActive = question.classList.contains('active');
-            
-            document.querySelectorAll('.faq-question').forEach(q => {
-                q.classList.remove('active');
-                q.nextElementSibling.classList.remove('show');
+        
+        // Close menu when clicking overlay
+        menuOverlay.addEventListener('click', closeMobileMenu);
+        
+        // Close menu when clicking any link inside mobile menu
+        mobileMenu.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', function() {
+                setTimeout(closeMobileMenu, 150);
             });
+        });
+        
+        // Close menu on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && mobileMenu.classList.contains('active')) {
+                closeMobileMenu();
+                mobileMenuBtn.focus();
+            }
+        });
+        
+        // Ensure menu closes on window resize to desktop
+        window.addEventListener('resize', function() {
+            if (window.innerWidth >= 1024) {
+                closeMobileMenu();
+            }
+        });
+
+        // ============================================
+        // FAQ ACCORDION
+        // ============================================
+        document.querySelectorAll('.faq-question').forEach(button => {
+            button.addEventListener('click', function() {
+                const expanded = this.getAttribute('aria-expanded') === 'true';
+                
+                document.querySelectorAll('.faq-question').forEach(btn => {
+                    btn.setAttribute('aria-expanded', 'false');
+                    btn.nextElementSibling?.classList.remove('open');
+                });
+                
+                if (!expanded) {
+                    this.setAttribute('aria-expanded', 'true');
+                    this.nextElementSibling?.classList.add('open');
+                }
+            });
+        });
+
+        // ============================================
+        // SMOOTH SCROLL
+        // ============================================
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href === '#') return;
+                const target = document.querySelector(href);
+                if (target) {
+                    e.preventDefault();
+                    const offset = document.querySelector('.header').offsetHeight;
+                    const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+                    window.scrollTo({ top, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // ============================================
+        // AI CHATBOT
+        // ============================================
+        const chatbotToggle = document.getElementById('chatbotToggle');
+        const chatbotWindow = document.getElementById('chatbotWindow');
+        const closeChatbot = document.getElementById('closeChatbot');
+        const chatInput = document.getElementById('chatInput');
+        const sendChatBtn = document.getElementById('sendChatBtn');
+        const chatMessages = document.getElementById('chatMessages');
+        
+        let isBotTyping = false;
+
+        function openChatbot() {
+            chatbotWindow.classList.add('active');
+            chatbotToggle.setAttribute('aria-expanded', 'true');
+            chatbotToggle.style.display = 'none';
+            setTimeout(() => chatInput.focus(), 300);
+        }
+
+        function closeChatbotWindow() {
+            chatbotWindow.classList.remove('active');
+            chatbotToggle.setAttribute('aria-expanded', 'false');
+            chatbotToggle.style.display = 'flex';
+        }
+
+        chatbotToggle.addEventListener('click', openChatbot);
+        closeChatbot.addEventListener('click', closeChatbotWindow);
+
+        function getAIResponse(msg) {
+            const m = msg.toLowerCase().trim();
+            if (m.includes('register') || m.includes('sign up')) return "To register, go to the Student Portal and click 'Get Started'. You'll need your student number and email. After registration, you'll receive your unique Carelink QR code!";
+            if (m.includes('qr')) return "Your Carelink QR code is available on your student dashboard after registration. Use it to check in at the kiosk for quick access to clinic services.";
+            if (m.includes('appointment') || m.includes('book')) return "You can book appointments through the Student Portal after logging in. Go to 'Appointments' tab and select your preferred date and time.";
+            if (m.includes('hours') || m.includes('open')) return "Clinic Hours:\n- Monday to Friday: 7:30 AM - 5:00 PM\n- Saturday: 8:00 AM - 12:00 PM\n- Sunday: Closed";
+            if (m.includes('location') || m.includes('where')) return "PUP Binan Campus is located at Brgy. Zapote, Binan City, Laguna. The clinic is on the ground floor of the main building.";
+            if (m.includes('kiosk') || m.includes('check in')) return "The self-service kiosk lets you check in using your QR code. Answer the health assessment and receive your queue number.";
+            if (m.includes('login') || m.includes('password')) return "Use the 'Sign In' button on the homepage. If you forgot your password, contact the clinic administrator.";
+            if (m.includes('contact') || m.includes('email')) return "Email: clinic.binan@pup.edu.ph\nPhone: (049) 123-4567\nOr use the contact form!";
+            if (m.includes('hello') || m.includes('hi')) return "Hello! Welcome to PUPBC Carelink. How can I assist you today?";
+            if (m.includes('thank')) return "You're welcome! Is there anything else I can help you with?";
+            return "I'm not sure about that. Please contact the clinic at clinic.binan@pup.edu.ph or call (049) 123-4567.";
+        }
+
+        function addMessage(text, isUser) {
+            const div = document.createElement('div');
+            div.className = `message ${isUser ? 'message-user' : 'message-bot'}`;
+            div.textContent = text;
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendMessage() {
+            const userMsg = chatInput.value.trim();
+            if (!userMsg || isBotTyping) return;
             
-            if (!isActive) {
-                question.classList.add('active');
-                answer.classList.add('show');
+            isBotTyping = true;
+            sendChatBtn.disabled = true;
+            addMessage(userMsg, true);
+            chatInput.value = '';
+            
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message message-bot';
+            typingDiv.textContent = '...';
+            typingDiv.id = 'typingIndicator';
+            chatMessages.appendChild(typingDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            setTimeout(() => {
+                document.getElementById('typingIndicator')?.remove();
+                addMessage(getAIResponse(userMsg), false);
+                isBotTyping = false;
+                sendChatBtn.disabled = false;
+                chatInput.focus();
+            }, 800 + Math.random() * 500);
+        }
+
+        sendChatBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        document.addEventListener('click', function(e) {
+            if (chatbotWindow.classList.contains('active') && 
+                !chatbotWindow.contains(e.target) && 
+                !chatbotToggle.contains(e.target)) {
+                closeChatbotWindow();
             }
         });
-    });
-    
-    // Smooth scroll for anchor links — offset for sticky header
-    const HEADER_HEIGHT = 70;
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function(e) {
-            const href = this.getAttribute('href');
-            if (href === '#') return;
-            const target = document.querySelector(href);
-            if (target) {
-                e.preventDefault();
-                const top = target.getBoundingClientRect().top + window.scrollY - HEADER_HEIGHT;
-                window.scrollTo({ top, behavior: 'smooth' });
-            }
-        });
-    });
-    
-    // ============================================
-    // AI CHATBOT - Smart Responses
-    // ============================================
-    
-    const chatbotBtn = document.getElementById('chatbotBtn');
-    const chatbotWindow = document.getElementById('chatbotWindow');
-    const closeChatbotBtn = document.getElementById('closeChatbotBtn');
-    const chatInput = document.getElementById('chatInput');
-    const sendChatBtn = document.getElementById('sendChatBtn');
-    const chatMessages = document.getElementById('chatMessages');
-    
-    let isBotTyping = false;
 
-    // Open chatbot
-    chatbotBtn.addEventListener('click', () => {
-        chatbotWindow.classList.add('open');
-        chatInput.focus();
-    });
-    
-    // Close chatbot
-    closeChatbotBtn.addEventListener('click', () => {
-        chatbotWindow.classList.remove('open');
-    });
-    
-    // Send message on button click
-    sendChatBtn.addEventListener('click', () => {
-        sendMessage();
-    });
-    
-    // Send message on Enter key
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            sendMessage();
+        // ============================================
+        // CONTACT FORM VALIDATION
+        // ============================================
+        const contactForm = document.getElementById('contactForm');
+        if (contactForm) {
+            contactForm.addEventListener('submit', function(e) {
+                this.querySelectorAll('.inline-error').forEach(el => el.remove());
+                const fields = this.querySelectorAll('input:not([type=hidden]), textarea');
+                fields.forEach(f => f.style.borderColor = '');
+                
+                let isValid = true;
+                const nameEl = document.getElementById('contact_name');
+                const emailEl = document.getElementById('contact_email');
+                const messageEl = document.getElementById('contact_message');
+
+                function showError(el, msg) {
+                    el.style.borderColor = '#dc2626';
+                    const err = document.createElement('p');
+                    err.className = 'inline-error';
+                    err.textContent = msg;
+                    el.parentNode.appendChild(err);
+                    isValid = false;
+                }
+
+                if (nameEl.value.trim().length < 2) showError(nameEl, 'Please enter your full name.');
+                
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailPattern.test(emailEl.value.trim())) showError(emailEl, 'Please enter a valid email address.');
+                
+                if (messageEl.value.trim().length < 10) showError(messageEl, 'Message must be at least 10 characters.');
+
+                if (!isValid) {
+                    e.preventDefault();
+                    this.querySelector('.inline-error')?.previousElementSibling?.focus();
+                } else {
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                }
+            });
         }
     });
-    
-    // AI Response Database
-    function getAIResponse(userMessage) {
-        const msg = userMessage.toLowerCase().trim();
-        
-        // Registration questions
-        if (msg.includes('register') || msg.includes('sign up') || msg.includes('create account')) {
-            return "To register, go to the Student Portal and click 'Get Started' or 'Register'. You'll need your student number, email, and personal information. After registration, you'll receive your unique Carelink QR code!";
-        }
-        
-        // QR Code questions
-        if (msg.includes('qr') || msg.includes('qrcode') || msg.includes('qr code')) {
-            return "Your Carelink QR code is available on your student dashboard after registration. You can download, print, or save it to your phone. Use it to check in at the kiosk for quick access to clinic services.";
-        }
-        
-        // Appointment questions
-        if (msg.includes('appointment') || msg.includes('book') || msg.includes('schedule')) {
-            return "You can book appointments through the Student Portal after logging in. Go to 'Appointments' tab, select your preferred date and time, and submit your request. Clinic staff will confirm your appointment.";
-        }
-        
-        // Clinic hours
-        if (msg.includes('hours') || msg.includes('open') || msg.includes('clinic hours') || msg.includes('schedule')) {
-            return "Clinic Hours:\n- Monday to Friday: 7:30 AM - 5:00 PM\n- Saturday: 8:00 AM - 12:00 PM\n- Sunday: Closed\n\nHolidays follow the official PUP academic calendar.";
-        }
-        
-        // Location
-        if (msg.includes('location') || msg.includes('where') || msg.includes('address')) {
-            return "PUP Binan Campus is located at Brgy. Zapote, Binan City, Laguna. The clinic is on the ground floor of the main building.";
-        }
-        
-        // Kiosk
-        if (msg.includes('kiosk') || msg.includes('check in') || msg.includes('check-in')) {
-            return "The self-service kiosk lets you check in using your QR code or student number. Answer the health assessment questions and you'll receive your queue number instantly.";
-        }
-        
-        // Login issues
-        if (msg.includes('login') || msg.includes('sign in') || msg.includes('forgot password')) {
-            return "For login issues, make sure you're using the correct student number and password. If you forgot your password, contact the clinic administrator to reset it. Use the 'Sign In' button on the homepage.";
-        }
-        
-        // Contact
-        if (msg.includes('contact') || msg.includes('call') || msg.includes('email')) {
-            return "You can reach us at:\n- Email: clinic.binan@pup.edu.ph\n- Phone: (049) 123-4567\n- Or use the contact form on this page!";
-        }
-        
-        // Hello / Greeting
-        if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey') || msg.includes('good morning') || msg.includes('good afternoon')) {
-            return "Hello! Welcome to PUPBC Carelink. How can I assist you today?";
-        }
-        
-        // Thank you
-        if (msg.includes('thank') || msg.includes('thanks')) {
-            return "You're welcome! Is there anything else I can help you with?";
-        }
-        
-        // Help
-        if (msg.includes('help') || msg.includes('what can you do')) {
-            return "I can help you with:\n- Registration process\n- QR code information\n- Booking appointments\n- Clinic hours and location\n- Kiosk usage\n- Login assistance\n- Contact information\n\nJust type your question!";
-        }
-        
-        // Default response
-        return "I'm not sure about that. Please contact the clinic directly for more specific questions. You can call (049) 123-4567 or email clinic.binan@pup.edu.ph";
-    }
-    
-    // Add typing indicator
-    function showTypingIndicator() {
-        const typingDiv = document.createElement('div');
-        typingDiv.className = 'typing-indicator';
-        typingDiv.id = 'typingIndicator';
-        typingDiv.innerHTML = '<span></span><span></span><span></span>';
-        chatMessages.appendChild(typingDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-    
-    function removeTypingIndicator() {
-        const indicator = document.getElementById('typingIndicator');
-        if (indicator) {
-            indicator.remove();
-        }
-    }
-    
-    // Add message to chat
-    function addMessage(text, isUser) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${isUser ? 'message-user' : 'message-bot'}`;
-        messageDiv.textContent = text;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-    
-    // Send message function
-    function sendMessage() {
-        const userMessage = chatInput.value.trim();
-        if (userMessage === '' || isBotTyping) return;
-
-        isBotTyping = true;
-        sendChatBtn.disabled = true;
-
-        addMessage(userMessage, true);
-        chatInput.value = '';
-        showTypingIndicator();
-
-        setTimeout(() => {
-            removeTypingIndicator();
-            const response = getAIResponse(userMessage);
-            addMessage(response, false);
-            isBotTyping = false;
-            sendChatBtn.disabled = false;
-            chatInput.focus();
-        }, 500 + Math.random() * 400);
-    }
-    
-    // Prevent event bubbling on chatbot window
-    chatbotWindow.addEventListener('click', (e) => {
-        e.stopPropagation();
-    });
-    
-    // Close chatbot when clicking outside (optional)
-    document.addEventListener('click', (e) => {
-        if (!chatbotWindow.contains(e.target) && !chatbotBtn.contains(e.target)) {
-            chatbotWindow.classList.remove('open');
-        }
-    });
-    
-    // Contact form inline validation (replaces intrusive alert() calls)
-    const contactForm = document.getElementById('contactForm');
-    if (contactForm) {
-        contactForm.addEventListener('submit', function(e) {
-            const nameEl    = this.querySelector('#contact_name');
-            const emailEl   = this.querySelector('#contact_email');
-            const messageEl = this.querySelector('#contact_message');
-            let valid = true;
-
-            // Clear previous inline errors
-            this.querySelectorAll('.inline-error').forEach(el => el.remove());
-            [nameEl, emailEl, messageEl].forEach(el => el.style.borderColor = '');
-
-            function showError(el, msg) {
-                el.style.borderColor = '#ef4444';
-                const err = document.createElement('p');
-                err.className = 'inline-error';
-                err.style.cssText = 'color:#ef4444;font-size:12px;margin-top:4px;';
-                err.textContent = msg;
-                el.parentNode.appendChild(err);
-                valid = false;
-            }
-
-            if (nameEl.value.trim().length < 2)    showError(nameEl, 'Please enter your full name.');
-            const emailVal = emailEl.value.trim();
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(emailVal))         showError(emailEl, 'Please enter a valid email address.');
-            if (messageEl.value.trim().length < 10) showError(messageEl, 'Message must be at least 10 characters.');
-
-            if (!valid) { e.preventDefault(); return; }
-
-            const submitBtn = this.querySelector('button[type="submit"]');
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-        });
-    }
 </script>
 
 </body>
