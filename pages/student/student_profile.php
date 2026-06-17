@@ -508,28 +508,39 @@ $csrf_token = $_SESSION['csrf_token'];
         .strength-strong { width: 100%; background: #22c55e; }
         a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #800020; outline-offset: 2px; border-radius: 4px; }
         .nav-active { background-color: rgba(201,168,76,0.15); color: #c9a84c; font-weight: 600; }
+        .nav-active-mobile { color: #800020; border-top: 2px solid #800020; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
     </style>
 </head>
 <body class="min-h-screen bg-gray-50">
 
 <!-- DESKTOP SIDEBAR -->
-<aside class="hidden lg:flex lg:flex-col fixed top-0 left-0 h-full w-64 bg-primary shadow-xl z-40 overflow-y-auto" role="navigation" aria-label="Main navigation">
+<aside class="hidden lg:flex lg:flex-col fixed top-0 left-0 h-full w-64 bg-[#800020] shadow-xl z-40 overflow-y-auto" role="navigation" aria-label="Main navigation">
     
     <nav class="flex-1 py-4 space-y-1">
-        <div class="px-5 mb-2"><p class="text-[10px] font-semibold uppercase tracking-wider text-accent/80">Main Menu</p></div>
-        <a href="student_dashboard.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-th-large w-5 text-center"></i><span class="text-sm font-medium">Dashboard</span></a>
-        <a href="student_profile.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all text-white nav-active" aria-current="page"><i class="fas fa-user w-5 text-center"></i><span class="text-sm font-medium">My Profile</span></a>
-        <a href="student_qr.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-qrcode w-5 text-center"></i><span class="text-sm font-medium">My QR Code</span></a>
-        <a href="student_record.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-notes-medical w-5 text-center"></i><span class="text-sm font-medium">Health Records</span></a>
-        <a href="student_appointments.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-calendar-alt w-5 text-center"></i><span class="text-sm font-medium">Appointments</span></a>
-        <a href="student_announcement.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-bullhorn w-5 text-center"></i><span class="text-sm font-medium">Announcements</span></a>
-        <a href="student_notifications.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-bell w-5 text-center"></i><span class="text-sm font-medium">Notifications</span></a>
-        <a href="student_settings.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-all"><i class="fas fa-cog w-5 text-center"></i><span class="text-sm font-medium">Settings</span></a>
-        <div class="border-t border-primary-dark my-4 mx-5"></div>
-        <a href="logout.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-red-600/20 transition-all"><i class="fas fa-sign-out-alt w-5 text-center"></i><span class="text-sm font-medium">Sign Out</span></a>
+        <div class="px-5 mb-2"><p class="text-[10px] font-semibold uppercase tracking-wider text-[#c9a84c]/80">Main Menu</p></div>
+        
+        <a href="student_dashboard.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_dashboard.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_dashboard.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-th-large w-5 text-center"></i><span class="text-sm font-medium">Dashboard</span></a>
+        <a href="student_profile.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_profile.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_profile.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-user w-5 text-center"></i><span class="text-sm font-medium">My Profile</span></a>
+        <a href="student_qr.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_qr.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_qr.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-qrcode w-5 text-center"></i><span class="text-sm font-medium">My QR Code</span></a>
+        <a href="student_record.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_record.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_record.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-notes-medical w-5 text-center"></i><span class="text-sm font-medium">Health Records</span></a>
+        <a href="student_appointments.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_appointments.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_appointments.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-calendar-alt w-5 text-center"></i><span class="text-sm font-medium">Appointments</span></a>
+        <a href="student_announcement.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_announcement.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_announcement.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-bullhorn w-5 text-center"></i><span class="text-sm font-medium">Announcements</span></a>
+        <a href="student_notifications.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_notifications.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_notifications.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-bell w-5 text-center"></i><span class="text-sm font-medium">Notifications</span>
+            <?php if (isset($unread_count) && $unread_count > 0): ?>
+                <span class="ml-auto bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"><?php echo $unread_count > 9 ? '9+' : $unread_count; ?></span>
+            <?php endif; ?>
+        </a>
+        <a href="student_settings.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg transition-all <?php echo $current_page == 'student_settings.php' ? 'text-white nav-active' : 'text-white/80 hover:text-white hover:bg-white/10'; ?>" <?php echo $current_page == 'student_settings.php' ? 'aria-current="page"' : ''; ?>><i class="fas fa-cog w-5 text-center"></i><span class="text-sm font-medium">Settings</span></a>
+        
+        <div class="border-t border-[#5c0017] my-4 mx-5"></div>
+        
+        <a href="student_logout.php" class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-red-600/20 transition-all"><i class="fas fa-sign-out-alt w-5 text-center"></i><span class="text-sm font-medium">Sign Out</span></a>
     </nav>
-    <div class="p-4 border-t border-primary-dark mt-auto"><p class="text-[10px] text-white/30 text-center">&copy; <?php echo date('Y'); ?> PUPBC Carelink</p></div>
+    
+    <div class="p-4 border-t border-[#5c0017] mt-auto">
+        <p class="text-[10px] text-white/30 text-center">&copy; <?php echo date('Y'); ?> PUPBC Carelink</p>
+    </div>
 </aside>
 
 <!-- MAIN CONTENT -->
@@ -843,14 +854,31 @@ $csrf_token = $_SESSION['csrf_token'];
     </div>
 </main>
 
-<!-- MOBILE BOTTOM NAV -->
-<nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 lg:hidden z-40 safe-bottom" aria-label="Mobile navigation">
+<!-- MOBILE BOTTOM NAVIGATION -->
+<nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 lg:hidden z-40 safe-bottom shadow-[0_-4px_12px_rgba(0,0,0,0.05)]" aria-label="Mobile navigation">
     <div class="flex justify-around items-center py-1.5 px-2 max-w-lg mx-auto">
-        <a href="student_dashboard.php" class="flex flex-col items-center py-1 px-3 rounded-lg text-gray-400"><i class="fas fa-th-large text-lg"></i><span class="text-[10px] mt-0.5">Home</span></a>
-        <a href="student_qr.php" class="flex flex-col items-center py-1 px-3 rounded-lg text-gray-400"><i class="fas fa-qrcode text-lg"></i><span class="text-[10px] mt-0.5">QR</span></a>
-        <a href="student_record.php" class="flex flex-col items-center py-1 px-3 rounded-lg text-gray-400"><i class="fas fa-notes-medical text-lg"></i><span class="text-[10px] mt-0.5">Records</span></a>
-        <a href="student_appointments.php" class="flex flex-col items-center py-1 px-3 rounded-lg text-gray-400"><i class="fas fa-calendar-alt text-lg"></i><span class="text-[10px] mt-0.5">Appts</span></a>
-        <a href="student_profile.php" class="flex flex-col items-center py-1 px-3 rounded-lg" style="color:#800020;" aria-current="page"><i class="fas fa-user-circle text-lg"></i><span class="text-[10px] mt-0.5 font-medium border-t-2 border-primary">Profile</span></a>
+        <a href="student_dashboard.php" class="flex flex-col items-center py-1 px-3 rounded-lg <?php echo $current_page === 'student_dashboard.php' ? 'nav-active-mobile' : 'text-gray-400 hover:text-gray-600 transition-colors'; ?>" <?php echo $current_page === 'student_dashboard.php' ? 'aria-current="page"' : ''; ?>>
+            <i class="fas fa-th-large text-lg"></i><span class="text-[10px] mt-0.5 font-medium">Home</span>
+        </a>
+        <a href="student_qr.php" class="flex flex-col items-center py-1 px-3 rounded-lg <?php echo $current_page === 'student_qr.php' ? 'nav-active-mobile' : 'text-gray-400 hover:text-gray-600 transition-colors'; ?>" <?php echo $current_page === 'student_qr.php' ? 'aria-current="page"' : ''; ?>>
+            <i class="fas fa-qrcode text-lg"></i><span class="text-[10px] mt-0.5 font-medium">QR Code</span>
+        </a>
+        <a href="student_record.php" class="flex flex-col items-center py-1 px-3 rounded-lg <?php echo $current_page === 'student_record.php' ? 'nav-active-mobile' : 'text-gray-400 hover:text-gray-600 transition-colors'; ?>" <?php echo $current_page === 'student_record.php' ? 'aria-current="page"' : ''; ?>>
+            <i class="fas fa-notes-medical text-lg"></i><span class="text-[10px] mt-0.5 font-medium">Records</span>
+        </a>
+        <a href="student_appointments.php" class="flex flex-col items-center py-1 px-3 rounded-lg <?php echo $current_page === 'student_appointments.php' ? 'nav-active-mobile' : 'text-gray-400 hover:text-gray-600 transition-colors'; ?>" <?php echo $current_page === 'student_appointments.php' ? 'aria-current="page"' : ''; ?>>
+            <i class="fas fa-calendar-alt text-lg"></i><span class="text-[10px] mt-0.5 font-medium">Appts</span>
+        </a>
+        <a href="student_notifications.php" class="flex flex-col items-center py-1 px-3 rounded-lg relative <?php echo $current_page === 'student_notifications.php' ? 'nav-active-mobile' : 'text-gray-400 hover:text-gray-600 transition-colors'; ?>" <?php echo $current_page === 'student_notifications.php' ? 'aria-current="page"' : ''; ?>>
+            <i class="fas fa-bell text-lg"></i>
+            <?php if (isset($unread_count) && $unread_count > 0): ?>
+                <span class="absolute -top-0.5 right-0 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] flex items-center justify-center px-0.5"><?php echo $unread_count > 9 ? '9+' : $unread_count; ?></span>
+            <?php endif; ?>
+            <span class="text-[10px] mt-0.5 font-medium">Alerts</span>
+        </a>
+        <a href="student_profile.php" class="flex flex-col items-center py-1 px-3 rounded-lg <?php echo in_array($current_page, ['student_profile.php', 'student_settings.php']) ? 'nav-active-mobile' : 'text-gray-400 hover:text-gray-600 transition-colors'; ?>" <?php echo in_array($current_page, ['student_profile.php', 'student_settings.php']) ? 'aria-current="page"' : ''; ?>>
+            <i class="fas fa-user-circle text-lg"></i><span class="text-[10px] mt-0.5 font-medium">Profile</span>
+        </a>
     </div>
 </nav>
 

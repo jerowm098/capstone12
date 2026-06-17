@@ -960,7 +960,7 @@ $year = date('Y');
                         
                         <div class="form-group">
                             <label for="contact_name">Your Name <span style="color: var(--maroon);">*</span></label>
-                            <input type="text" id="contact_name" name="name" value="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="Juan Dela Cruz" autocomplete="name" aria-required="true">
+                            <input type="text" id="contact_name" name="name" value="<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>" required placeholder="Juan Dela Cruz" autocomplete="name" aria-required="true" pattern="[a-zA-Z\s\-'.\/]+" title="Name should only contain letters, spaces, hyphens, apostrophes, periods, or slashes">
                         </div>
                         <div class="form-group">
                             <label for="contact_email">Email Address <span style="color: var(--maroon);">*</span></label>
