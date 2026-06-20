@@ -2,7 +2,27 @@
 // capstonemain/kiosk/triage_form.php
 session_start();
 require_once '../config/db_connect.php';
-require_once '../config/email.php';
+
+// Check if email.php exists before requiring it
+$email_config_path = '../config/email.php';
+if (file_exists($email_config_path)) {
+    require_once $email_config_path;
+} else {
+    // Define a fallback email function if email.php doesn't exist
+    if (!function_exists('sendEmail')) {
+        function sendEmail($to, $subject, $message) {
+            // Simple fallback - just log or return true
+            error_log("Email would be sent to: $to, Subject: $subject");
+            return true;
+        }
+    }
+    
+    // Define any other constants that might be expected
+    if (!defined('SMTP_HOST')) define('SMTP_HOST', '');
+    if (!defined('SMTP_USER')) define('SMTP_USER', '');
+    if (!defined('SMTP_PASS')) define('SMTP_PASS', '');
+    if (!defined('SMTP_PORT')) define('SMTP_PORT', 587);
+}
 
 // Check if patient is verified
 if (!isset($_SESSION['patient_info']) || !isset($_SESSION['patient_info']['student_id'])) {
@@ -117,7 +137,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_triage'])) {
         ];
 
         // Redirect to queue status page
-        header('Location: queue_status.php');        exit();
+        header('Location: queue_status.php');
+        exit();
     } else {
         $error_message = "Failed to create visit. Please try again.";
     }

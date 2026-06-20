@@ -1,4 +1,9 @@
 <?php
+
+header("X-Frame-Options: SAMEORIGIN");
+header("X-Content-Type-Options: nosniff");
+header_remove("X-Powered-By");
+
 // capstonemain/index.php
 // db_connect.php handles session_start() with secure flags
 require_once __DIR__ . '/config/db_connect.php';
