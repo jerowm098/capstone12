@@ -1,0 +1,366 @@
+-- =====================================================
+-- INVENTORY MANAGEMENT DATABASE SCHEMA
+-- For PUPBC Carelink System
+-- =====================================================
+
+-- =====================================================
+-- 1. MEDICINES TABLE (Main inventory table)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS medicines (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    quantity INT NOT NULL DEFAULT 0,
+    unit VARCHAR(20) DEFAULT 'pcs',
+    threshold INT DEFAULT 10 COMMENT 'Minimum stock alert level',
+    expiration_date DATE NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_name (name),
+    INDEX idx_quantity (quantity),
+    INDEX idx_expiration (expiration_date),
+    INDEX idx_low_stock (quantity, threshold)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- 2. STOCK_LOGS TABLE (Track all inventory changes)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS stock_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    medicine_id INT NOT NULL,
+    user_id INT NOT NULL COMMENT 'Who made the change (nurse/admin)',
+    previous_quantity INT NOT NULL,
+    new_quantity INT NOT NULL,
+    adjustment_amount INT NOT NULL COMMENT 'Positive for addition, negative for removal',
+    reason VARCHAR(255) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    
+    INDEX idx_medicine (medicine_id),
+    INDEX idx_user (user_id),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- 3. MEDICINE_CATEGORIES TABLE (Optional - for organization)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS medicine_categories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- 4. Add category_id to medicines table (Optional)
+-- =====================================================
+ALTER TABLE medicines 
+ADD COLUMN IF NOT EXISTS category_id INT NULL,
+ADD FOREIGN KEY (category_id) REFERENCES medicine_categories(id) ON DELETE SET NULL,
+ADD INDEX idx_category (category_id);
+
+-- =====================================================
+-- 5. PRESCRIPTIONS TABLE (Link medicines to patient visits)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS prescriptions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    visit_id INT NOT NULL,
+    medicine_id INT NOT NULL,
+    dosage VARCHAR(100),
+    quantity INT NOT NULL,
+    instructions TEXT,
+    status ENUM('pending', 'dispensed', 'cancelled') DEFAULT 'pending',
+    dispensed_by INT NULL COMMENT 'Nurse who dispensed the medicine',
+    dispensed_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (visit_id) REFERENCES visits(id) ON DELETE CASCADE,
+    FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE RESTRICT,
+    FOREIGN KEY (dispensed_by) REFERENCES nurses(id) ON DELETE SET NULL,
+    
+    INDEX idx_visit (visit_id),
+    INDEX idx_medicine (medicine_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- 6. SUPPLIERS TABLE (Track medicine sources)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS suppliers (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    contact_person VARCHAR(100),
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    address TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- 7. Add supplier_id to medicines table (Optional)
+-- =====================================================
+ALTER TABLE medicines 
+ADD COLUMN IF NOT EXISTS supplier_id INT NULL,
+ADD FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL;
+
+-- =====================================================
+-- 8. REORDER_REQUESTS TABLE (For requesting new stock)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS reorder_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    medicine_id INT NOT NULL,
+    requested_quantity INT NOT NULL,
+    reason TEXT,
+    status ENUM('pending', 'approved', 'ordered', 'received', 'cancelled') DEFAULT 'pending',
+    requested_by INT NOT NULL,
+    approved_by INT NULL,
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    approved_at DATETIME NULL,
+    
+    FOREIGN KEY (medicine_id) REFERENCES medicines(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES nurses(id) ON DELETE CASCADE,
+    FOREIGN KEY (approved_by) REFERENCES nurses(id) ON DELETE SET NULL,
+    
+    INDEX idx_status (status),
+    INDEX idx_medicine (medicine_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- SAMPLE DATA FOR TESTING
+-- =====================================================
+
+-- Insert medicine categories
+INSERT INTO medicine_categories (name, description) VALUES
+('Pain Relief', 'Medicines for pain management'),
+('Antibiotics', 'Medicines that fight bacterial infections'),
+('Antihistamines', 'Medicines for allergies'),
+('First Aid', 'Basic first aid supplies'),
+('Vitamins', 'Dietary supplements and vitamins'),
+('Respiratory', 'Medicines for cough, cold, and breathing issues');
+
+-- Insert sample medicines
+INSERT INTO medicines (name, description, quantity, unit, threshold, expiration_date, category_id) VALUES
+('Paracetamol 500mg', 'For fever and mild to moderate pain relief', 150, 'tablet', 30, DATE_ADD(CURDATE(), INTERVAL 180 DAY), 1),
+('Ibuprofen 200mg', 'Anti-inflammatory for pain and fever', 85, 'tablet', 25, DATE_ADD(CURDATE(), INTERVAL 150 DAY), 1),
+('Amoxicillin 500mg', 'Antibiotic for bacterial infections', 45, 'capsule', 20, DATE_ADD(CURDATE(), INTERVAL 90 DAY), 2),
+('Cetirizine 10mg', 'Antihistamine for allergies', 120, 'tablet', 25, DATE_ADD(CURDATE(), INTERVAL 200 DAY), 3),
+('Loratadine 10mg', 'Non-drowsy allergy relief', 95, 'tablet', 20, DATE_ADD(CURDATE(), INTERVAL 210 DAY), 3),
+('Alcohol 70%', 'Disinfectant solution for skin', 8, 'bottle', 5, DATE_ADD(CURDATE(), INTERVAL 365 DAY), 4),
+('Gauze Pads', 'Sterile gauze for wound dressing', 200, 'pcs', 40, DATE_ADD(CURDATE(), INTERVAL 400 DAY), 4),
+('Bandages', 'Elastic bandage wrap', 50, 'roll', 15, NULL, 4),
+('Ascorbic Acid 500mg', 'Vitamin C supplement', 300, 'tablet', 50, DATE_ADD(CURDATE(), INTERVAL 250 DAY), 5),
+('Carbocisteine', 'Mucolytic for cough with phlegm', 60, 'capsule', 15, DATE_ADD(CURDATE(), INTERVAL 120 DAY), 6);
+
+-- Insert a supplier
+INSERT INTO suppliers (name, contact_person, email, phone, address) VALUES
+('MediSupply Philippines', 'Juan Santos', 'orders@medisupply.ph', '09123456789', 'Manila, Philippines'),
+('PharmaCare Distributors', 'Maria Reyes', 'sales@pharmacare.com', '09876543210', 'Quezon City, Philippines');
+
+-- Update some medicines with supplier info
+UPDATE medicines SET supplier_id = 1 WHERE id IN (1, 2, 3, 4, 5, 9);
+UPDATE medicines SET supplier_id = 2 WHERE id IN (6, 7, 8, 10);
+
+-- =====================================================
+-- STORED PROCEDURE: Auto-decrease stock when dispensing
+-- =====================================================
+DELIMITER //
+
+CREATE PROCEDURE dispense_medicine(
+    IN p_prescription_id INT,
+    IN p_nurse_id INT
+)
+BEGIN
+    DECLARE v_medicine_id INT;
+    DECLARE v_quantity INT;
+    DECLARE v_current_quantity INT;
+    
+    -- Get medicine info from prescription
+    SELECT medicine_id, quantity INTO v_medicine_id, v_quantity
+    FROM prescriptions
+    WHERE id = p_prescription_id;
+    
+    -- Get current stock
+    SELECT quantity INTO v_current_quantity
+    FROM medicines
+    WHERE id = v_medicine_id;
+    
+    -- Check if enough stock
+    IF v_current_quantity >= v_quantity THEN
+        -- Update medicine stock
+        UPDATE medicines 
+        SET quantity = quantity - v_quantity
+        WHERE id = v_medicine_id;
+        
+        -- Log the stock change
+        INSERT INTO stock_logs (medicine_id, user_id, previous_quantity, new_quantity, adjustment_amount, reason)
+        SELECT v_medicine_id, 
+               (SELECT user_id FROM nurses WHERE id = p_nurse_id),
+               v_current_quantity,
+               v_current_quantity - v_quantity,
+               -v_quantity,
+               'Dispensed for prescription';
+        
+        -- Update prescription status
+        UPDATE prescriptions 
+        SET status = 'dispensed', 
+            dispensed_by = p_nurse_id,
+            dispensed_at = NOW()
+        WHERE id = p_prescription_id;
+        
+        SELECT 'Success' as result, 'Medicine dispensed successfully' as message;
+    ELSE
+        SELECT 'Error' as result, CONCAT('Insufficient stock. Only ', v_current_quantity, ' available') as message;
+    END IF;
+END//
+
+DELIMITER ;
+
+-- =====================================================
+-- STORED PROCEDURE: Check low stock items
+-- =====================================================
+DELIMITER //
+
+CREATE PROCEDURE get_low_stock_items()
+BEGIN
+    SELECT 
+        m.id,
+        m.name,
+        m.quantity,
+        m.threshold,
+        m.unit,
+        c.name as category,
+        CASE 
+            WHEN m.quantity = 0 THEN 'Critical - Out of Stock'
+            WHEN m.quantity <= m.threshold THEN 'Low Stock - Reorder Needed'
+            ELSE 'Sufficient'
+        END as stock_status,
+        DATEDIFF(m.expiration_date, CURDATE()) as days_until_expiry
+    FROM medicines m
+    LEFT JOIN medicine_categories c ON m.category_id = c.id
+    WHERE m.quantity <= m.threshold OR m.expiration_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+    ORDER BY 
+        CASE 
+            WHEN m.quantity = 0 THEN 1
+            WHEN m.quantity <= m.threshold THEN 2
+            ELSE 3
+        END,
+        m.quantity ASC;
+END//
+
+DELIMITER ;
+
+-- =====================================================
+-- TRIGGER: Auto-log stock changes
+-- =====================================================
+DELIMITER //
+
+CREATE TRIGGER after_medicine_update
+AFTER UPDATE ON medicines
+FOR EACH ROW
+BEGIN
+    IF OLD.quantity != NEW.quantity THEN
+        -- This is handled by the application, but we can auto-log if needed
+        -- The application should insert into stock_logs directly for better control
+        SIGNAL SQLSTATE '01000' 
+        SET MESSAGE_TEXT = 'Stock quantity changed - please log the reason';
+    END IF;
+END//
+
+DELIMITER ;
+
+-- =====================================================
+-- VIEW: Current inventory summary
+-- =====================================================
+CREATE OR REPLACE VIEW inventory_summary AS
+SELECT 
+    COUNT(*) as total_medicines,
+    SUM(quantity) as total_units,
+    COUNT(CASE WHEN quantity = 0 THEN 1 END) as out_of_stock_count,
+    COUNT(CASE WHEN quantity <= threshold AND quantity > 0 THEN 1 END) as low_stock_count,
+    COUNT(CASE WHEN expiration_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) AND expiration_date > CURDATE() THEN 1 END) as expiring_soon_count,
+    COUNT(CASE WHEN expiration_date < CURDATE() THEN 1 END) as expired_count
+FROM medicines;
+
+-- =====================================================
+-- VIEW: Detailed inventory with stock status
+-- =====================================================
+CREATE OR REPLACE VIEW inventory_details AS
+SELECT 
+    m.id,
+    m.name,
+    m.description,
+    m.quantity,
+    m.unit,
+    m.threshold,
+    m.expiration_date,
+    c.name as category,
+    s.name as supplier,
+    CASE 
+        WHEN m.quantity = 0 THEN 'danger'
+        WHEN m.quantity <= m.threshold THEN 'warning'
+        WHEN m.expiration_date <= CURDATE() THEN 'expired'
+        WHEN m.expiration_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'expiring_soon'
+        ELSE 'good'
+    END as status,
+    CASE 
+        WHEN m.quantity = 0 THEN 'Out of Stock'
+        WHEN m.quantity <= m.threshold THEN 'Low Stock'
+        WHEN m.expiration_date <= CURDATE() THEN 'Expired'
+        WHEN m.expiration_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'Expiring Soon'
+        ELSE 'Adequate'
+    END as status_label,
+    DATEDIFF(m.expiration_date, CURDATE()) as days_until_expiry
+FROM medicines m
+LEFT JOIN medicine_categories c ON m.category_id = c.id
+LEFT JOIN suppliers s ON m.supplier_id = s.id;
+
+-- =====================================================
+-- SAMPLE QUERIES FOR THE INVENTORY PAGE
+-- =====================================================
+
+-- 1. Get dashboard statistics
+SELECT * FROM inventory_summary;
+
+-- 2. Get all medicines with stock status
+SELECT * FROM inventory_details ORDER BY 
+    FIELD(status, 'danger', 'warning', 'expiring_soon', 'expired', 'good'),
+    name ASC;
+
+-- 3. Get low stock items only
+SELECT * FROM inventory_details WHERE status IN ('danger', 'warning');
+
+-- 4. Get stock logs for a specific medicine
+SELECT 
+    sl.*,
+    u.first_name,
+    u.last_name
+FROM stock_logs sl
+JOIN users u ON sl.user_id = u.id
+WHERE sl.medicine_id = 1
+ORDER BY sl.created_at DESC
+LIMIT 20;
+
+-- 5. Get total value/inventory report
+SELECT 
+    DATE(created_at) as date,
+    SUM(CASE WHEN adjustment_amount > 0 THEN adjustment_amount ELSE 0 END) as total_added,
+    SUM(CASE WHEN adjustment_amount < 0 THEN ABS(adjustment_amount) ELSE 0 END) as total_removed,
+    COUNT(*) as total_transactions
+FROM stock_logs
+GROUP BY DATE(created_at)
+ORDER BY date DESC
+LIMIT 30;
+
+-- =====================================================
+-- INDEXES FOR PERFORMANCE
+-- =====================================================
+
+-- Additional indexes for better query performance
+CREATE INDEX idx_medicines_status ON medicines(quantity, threshold);
+CREATE INDEX idx_medicines_expiry ON medicines(expiration_date);
+CREATE INDEX idx_stock_logs_medicine_date ON stock_logs(medicine_id, created_at);
+CREATE INDEX idx_prescriptions_medicine_status ON prescriptions(medicine_id, status);
